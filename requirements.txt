@@ -1,0 +1,6 @@
+boto3
+google-cloud-storage
+openai
+requests
+transformers
+torch
