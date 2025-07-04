@@ -1,0 +1,12 @@
+{
+  "name": "toolbox-mcp",
+  "version": "1.0.0",
+  "description": "Toolbox MCP Server providing various utility tools",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": ["mcp", "toolbox", "cursor"],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,31 @@
+{
+  "name": "mcp-servers-setup",
+  "version": "1.0.0",
+  "description": "Setup and configuration for MCP servers integration with Cursor IDE",
+  "main": "index.js",
+  "scripts": {
+    "setup": "./setup-mcp-servers.sh",
+    "build": "cd mcp-servers/context-7 && npm run build && cd ../toolbox && npm run build",
+    "start:context-7": "cd mcp-servers/context-7 && npm start",
+    "start:toolbox": "cd mcp-servers/toolbox && npm start",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cursor",
+    "ide",
+    "context",
+    "toolbox"
+  ],
+  "author": "Moe",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Moek1998/Moes-repository.git"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
