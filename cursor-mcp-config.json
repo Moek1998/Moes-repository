@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "context-7": {
+      "command": "node",
+      "args": ["./mcp-servers/context-7/index.js"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    },
+    "toolbox": {
+      "command": "node", 
+      "args": ["./mcp-servers/toolbox/index.js"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}
