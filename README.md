@@ -1,279 +1,222 @@
-# Claude CLI
+# Flickr Auto-Like Program
 
-A command-line interface for interacting with Claude AI from Anthropic. Run `claude` from anywhere in your terminal to chat with Claude! ✨
-
-## 🎯 Claude Pro vs API Access
-
-**Important:** This CLI uses **API access** which is separate from Claude Pro subscriptions:
-
-- **Claude Pro ($20/month)**: Web interface with Squad, Code, priority access at [claude.ai](https://claude.ai)
-- **API Access (Pay-per-use)**: For developers, integrations, and this CLI tool
-- **This CLI**: Uses API access but simulates Pro features like Squad and Code modes
+A Python program that automatically likes photos on Flickr containing the word "Muneca" (or any other specified keywords).
 
 ## Features
 
-- 🚀 Global access from any directory
-- 💬 Enhanced interactive chat mode with conversation history
-- 👥 **Claude Squad Simulator** - Team collaboration features
-- 💻 **Claude Code Simulator** - Advanced coding assistance
-- 🤖 Multiple Claude model support (3.5 Sonnet, Opus, Haiku, etc.)
-- 🔧 Configurable settings (model, temperature, tokens)
-- 🔑 Secure API key management
-- 🖥️ Cross-platform support (Linux, WSL, Windows)
-- 📝 System prompts support
-- ⚡ Fast and lightweight
+- 🔍 **Smart Search**: Search for photos by keywords in titles, descriptions, and tags
+- ❤️ **Auto-Like**: Automatically like photos matching your criteria
+- 🔐 **OAuth Authentication**: Secure authentication with Flickr API
+- ⚙️ **Configurable**: Extensive configuration options for search and behavior
+- � **Progress Tracking**: Keeps track of liked photos to avoid duplicates
+- �️ **Rate Limiting**: Respects API limits with configurable delays
+- � **Logging**: Comprehensive logging for monitoring and debugging
+- � **Filtering**: Advanced filtering options (date range, users, tags, etc.)
+- 🧪 **Dry Run Mode**: Test the program without actually liking photos
 
 ## Installation
 
-### Linux / WSL
-
-1. Clone or download this repository
-2. Run the installation script:
-   ```bash
-   chmod +x install.sh
-   ./install.sh
-   ```
-3. If the installer warns about PATH, add the install directory to your PATH:
-   ```bash
-   echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
-   source ~/.bashrc
-   ```
-
-### Windows (PowerShell)
-
-1. Clone or download this repository
-2. Run PowerShell as Administrator and execute:
-   ```powershell
-   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-   .\install.ps1
-   ```
-3. If needed, add the install directory to your PATH environment variable
-
-### Manual Installation
-
-1. Install Python dependencies:
+1. **Clone or download this repository**
+2. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
-   ```
-2. Copy the files to a directory in your PATH
-3. Make the script executable (Linux/WSL):
-   ```bash
-   chmod +x claude
    ```
 
 ## Setup
 
-1. Get your Anthropic API key from [https://console.anthropic.com/](https://console.anthropic.com/)
+### 1. Get Flickr API Credentials
 
-2. Set up your API key (choose one method):
+1. Go to [Flickr App Garden](https://www.flickr.com/services/api/keys/)
+2. Click "Request an API Key"
+3. Choose "Apply for a Non-Commercial Key"
+4. Fill out the form with your application details
+5. You'll receive an API Key and API Secret
 
-   **Method 1: Using the CLI**
-   ```bash
-   claude --setup-key your_api_key_here
-   ```
+### 2. Configure the Program
 
-   **Method 2: Environment variable**
-   ```bash
-   export ANTHROPIC_API_KEY=your_api_key_here
-   ```
-
-   **Method 3: Config file**
-   ```bash
-   claude --config  # Shows config file location
-   # Edit the config file and add your API key
-   ```
-
-## Usage
-
-### Quick Commands
+Run the program once to generate a default configuration file:
 
 ```bash
-# Ask a single question
-claude "What is the capital of France?"
-
-# Use a specific model
-claude -m claude-3-opus-20240229 "Explain quantum computing"
-
-# Ask with a system prompt
-claude -s "You are a helpful coding assistant" "How do I reverse a string in Python?"
-
-# Start interactive mode
-claude -i
-
-# Claude Squad simulation (team collaboration)
-claude --squad
-
-# Claude Code simulation (coding assistant)
-claude --code
-
-# Show available models
-claude --models
-
-# Show Claude subscription info
-claude --info
-
-# Show config and help
-claude --config
-claude --help
+python flickr_auto_like.py
 ```
 
-### 🎯 Special Modes
-
-#### Claude Squad Simulator
-```bash
-claude --squad
-```
-Simulates Claude Pro's Squad features:
-- Team collaboration interface
-- Shared conversation history
-- Enhanced context management
-- Multiple AI personas
-
-#### Claude Code Simulator
-```bash
-claude --code
-```
-Simulates Claude Pro's Code features:
-- Expert programming assistant
-- Code review and optimization
-- Multi-language support
-- Best practices guidance
-
-### Interactive Mode
-
-```bash
-claude -i
-```
-
-Enhanced interactive features:
-- Type messages and get responses
-- `exit` or `quit` to leave
-- `clear` to clear screen and history
-- `help` for available commands
-- `models` to show available models
-- `info` for subscription information
-- `model <name>` to switch models
-- Use Ctrl+C to exit
-
-### Command Line Options
-
-- `message`: Send a message to Claude (if no message provided, starts interactive mode)
-- `-i, --interactive`: Start interactive mode explicitly
-- `-s, --system`: Provide a system prompt
-- `-m, --model`: Specify Claude model to use
-- `--squad`: Start Squad simulation mode
-- `--code`: Start Code simulation mode
-- `--models`: Show available models
-- `--info`: Show Claude subscription information
-- `--setup-key`: Set up your API key
-- `--config`: Show config file location
-- `--help`: Show help message
-
-## Configuration
-
-The CLI stores configuration in `~/.claude/config.ini`:
+This will create a `config.ini` file. Edit it with your API credentials:
 
 ```ini
-[DEFAULT]
+[FLICKR]
 api_key = your_api_key_here
-model = claude-3-sonnet-20240229
-max_tokens = 1000
+api_secret = your_api_secret_here
+oauth_token = 
+oauth_token_secret = 
+
+[SEARCH]
+keywords = Muneca
+search_in = title,description,tags
+per_page = 100
+max_pages = 10
+sort = date-posted-desc
+privacy_filter = 1
+content_type = 1
+media = photos
+
+[BEHAVIOR]
+max_likes_per_run = 50
+delay_between_likes = 2
+skip_own_photos = true
+skip_already_liked = true
+dry_run = false
+
+[FILTERS]
+min_upload_date = 
+max_upload_date = 
+exclude_users = 
+required_tags = 
+exclude_tags = 
 ```
 
-You can edit this file to change:
-- `model`: The Claude model to use
-- `max_tokens`: Maximum tokens in responses
-- `api_key`: Your Anthropic API key (optional if using environment variable)
+### 3. First Run and Authentication
 
-## 🤖 Available Models
-
-This CLI supports all Claude models:
-
-| Model | Description | Best For |
-|-------|-------------|----------|
-| `claude-3-5-sonnet-20241022` | Latest & most capable | General use, coding, analysis |
-| `claude-3-opus-20240229` | Most powerful reasoning | Complex tasks, research |
-| `claude-3-sonnet-20240229` | Balanced performance | Most applications |
-| `claude-3-haiku-20240307` | Fastest & cheapest | Quick responses, high volume |
-| `claude-2.1` | Legacy model | Established workflows |
-
-## 🎯 Understanding Claude Access Types
-
-| Access Type | Cost | What You Get | How to Access |
-|-------------|------|--------------|---------------|
-| **Claude Free** | Free | Limited daily usage | [claude.ai](https://claude.ai) |
-| **Claude Pro** | $20/month | 5x usage, Squad, Code, priority | [claude.ai](https://claude.ai) |
-| **Claude Team** | $25/user/month | Team features, admin tools | Contact Anthropic |
-| **Claude Enterprise** | Custom | SSO, security, custom training | Contact Anthropic |
-| **API Access** | Pay-per-use | Developer integrations, this CLI | [console.anthropic.com](https://console.anthropic.com) |
-
-## Examples
+Run the program again after adding your API credentials:
 
 ```bash
-# Simple question
-claude "Explain quantum computing in simple terms"
-
-# Use the most powerful model
-claude -m claude-3-opus-20240229 "Analyze this complex dataset"
-
-# Coding help with Code simulator
-claude --code
-[Code] You: Write a Python function to find prime numbers
-[Code] Claude: Here's an efficient prime number finder using the Sieve of Eratosthenes...
-
-# Team collaboration with Squad simulator
-claude --squad
-[Squad] You: Help me plan a project roadmap
-[Squad] Claude: I'll help you create a comprehensive project roadmap...
-
-# Creative writing
-claude -s "You are a creative writer" "Write a short story about a robot learning to paint"
-
-# Interactive coding session
-claude -i
-You: I need help with a React component
-Claude: I'd be happy to help you with your React component! What specific functionality are you trying to implement?
-You: I want to create a todo list
-Claude: Great! Here's a simple todo list component...
+python flickr_auto_like.py
 ```
+
+The program will:
+1. Open a browser window for OAuth authorization
+2. Ask you to authorize the application
+3. Request you to enter the verification code
+4. Save the authentication tokens for future use
+
+## Configuration Options
+
+### FLICKR Section
+- `api_key`: Your Flickr API key
+- `api_secret`: Your Flickr API secret
+- `oauth_token`: OAuth token (auto-generated during first run)
+- `oauth_token_secret`: OAuth token secret (auto-generated during first run)
+
+### SEARCH Section
+- `keywords`: Keywords to search for (default: "Muneca")
+- `search_in`: Where to search (title, description, tags)
+- `per_page`: Number of photos per page (max 100)
+- `max_pages`: Maximum pages to search through
+- `sort`: Sort order (date-posted-desc, date-posted-asc, date-taken-desc, etc.)
+- `privacy_filter`: 1 for public photos, 0 for all
+- `content_type`: 1 for photos only, 2 for screenshots, 3 for other
+- `media`: Type of media (photos, videos, all)
+
+### BEHAVIOR Section
+- `max_likes_per_run`: Maximum number of photos to like per run
+- `delay_between_likes`: Delay in seconds between likes (to respect API limits)
+- `skip_own_photos`: Whether to skip your own photos
+- `skip_already_liked`: Whether to skip previously liked photos
+- `dry_run`: Test mode - doesn't actually like photos
+
+### FILTERS Section
+- `min_upload_date`: Minimum upload date (YYYY-MM-DD format)
+- `max_upload_date`: Maximum upload date (YYYY-MM-DD format)
+- `exclude_users`: Comma-separated list of user IDs to exclude
+- `required_tags`: Comma-separated list of tags that must be present
+- `exclude_tags`: Comma-separated list of tags to exclude
+
+## Usage Examples
+
+### Basic Usage
+```bash
+python flickr_auto_like.py
+```
+
+### Test Mode (Dry Run)
+Set `dry_run = true` in config.ini to test without actually liking photos.
+
+### Search for Different Keywords
+Change the `keywords` in the SEARCH section:
+```ini
+keywords = cat cute kitten
+```
+
+### Limit by Date Range
+Filter photos by upload date:
+```ini
+min_upload_date = 2023-01-01
+max_upload_date = 2023-12-31
+```
+
+### Exclude Specific Users
+```ini
+exclude_users = 12345678@N00,87654321@N00
+```
+
+### Require Specific Tags
+```ini
+required_tags = photography,nature
+```
+
+## Files Created
+
+The program creates several files:
+
+- `config.ini`: Configuration file
+- `flickr_auto_like.log`: Log file with program output
+- `liked_photos.json`: List of previously liked photo IDs
+
+## Logging
+
+The program logs all activities to both the console and `flickr_auto_like.log`. Log levels include:
+
+- **INFO**: General program flow and successful operations
+- **WARNING**: Non-critical issues
+- **ERROR**: Critical errors that prevent operation
+
+## Rate Limiting
+
+The program includes built-in rate limiting to respect Flickr's API limits:
+
+- Default 2-second delay between likes
+- Configurable delay in the `delay_between_likes` setting
+- Maximum likes per run to prevent overwhelming the API
 
 ## Troubleshooting
 
-### "claude: command not found"
+### Authentication Issues
+- Make sure your API key and secret are correct
+- Delete the oauth_token and oauth_token_secret from config.ini to re-authenticate
+- Check that your app has the correct permissions
 
-The installation directory is not in your PATH. Add it:
+### No Photos Found
+- Verify your search keywords
+- Check the privacy_filter setting
+- Ensure you're searching in the right time range
 
-**Linux/WSL:**
-```bash
-echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
-source ~/.bashrc
-```
+### API Errors
+- Increase the delay_between_likes value
+- Reduce max_likes_per_run
+- Check your API rate limits on Flickr
 
-**Windows:**
-Add `%USERPROFILE%\.local\bin` to your PATH environment variable.
+## Ethical Usage
 
-### "No API key found"
+Please use this program responsibly:
 
-Set up your API key:
-```bash
-claude --setup-key your_api_key_here
-```
+- Don't spam likes on photos
+- Respect other users and their content
+- Follow Flickr's Terms of Service
+- Use reasonable delays between actions
+- Consider the impact on other users
 
-Or set the environment variable:
-```bash
-export ANTHROPIC_API_KEY=your_api_key_here
-```
+## Legal Disclaimer
 
-### Python/pip not found
+This program is provided for educational and automation purposes. Users are responsible for complying with Flickr's Terms of Service and API usage policies. The authors are not responsible for any misuse of this program.
 
-Install Python 3.7+ from [python.org](https://python.org) and ensure it's in your PATH.
+## Support
 
-## Requirements
+If you encounter issues:
 
-- Python 3.7 or higher
-- `requests` library
-- Valid Anthropic API key
+1. Check the log file for error messages
+2. Verify your configuration settings
+3. Ensure your API credentials are valid
+4. Check Flickr's API status
 
 ## License
 
-This project is open source and available under the MIT License.
+This program is provided as-is for educational purposes. Use at your own risk.
