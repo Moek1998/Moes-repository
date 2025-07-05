@@ -295,7 +295,13 @@ Always provide practical, working code examples when appropriate."""
                 if not user_input:
                     continue
                 
-                print(f"Claude ({self.model.split('-')[1]} {self.model.split('-')[2]}): ", end="", flush=True)
+                # Display model info safely
+                model_parts = self.model.split('-')
+                if len(model_parts) >= 3:
+                    model_display = f"{model_parts[1]} {model_parts[2]}"
+                else:
+                    model_display = self.model
+                print(f"Claude ({model_display}): ", end="", flush=True)
                 
                 # Add conversation context for better responses
                 context_message = user_input
