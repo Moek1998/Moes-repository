@@ -11,6 +11,11 @@ import json
 import requests
 from pathlib import Path
 import configparser
+from typing import List, Dict
+from claude_memory import ClaudeMemory
+from claude_webhooks import ClaudeWebhookServer
+from claude_mcp_services import mcp_manager
+from claude_automation_platform import get_automation_platform, AutomationTask, WorkflowDefinition
 
 class ClaudeCLI:
     def __init__(self):
@@ -27,6 +32,20 @@ class ClaudeCLI:
             'claude-3-haiku-20240307': 'Claude 3 Haiku (Fastest)',
             'claude-2.1': 'Claude 2.1 (Legacy)'
         }
+        
+        # Initialize memory system
+        self.memory = ClaudeMemory()
+        self.use_memory = True
+        
+        # Initialize webhook server
+        self.webhook_server = None
+        self.webhook_enabled = False
+        
+        # Initialize MCP services
+        self.mcp_services = mcp_manager
+        
+        # Initialize automation platform
+        self.automation_platform = get_automation_platform(self)
         
         self.setup_config()
 
@@ -47,7 +66,12 @@ class ClaudeCLI:
             'model': 'claude-3-5-sonnet-20241022',
             'max_tokens': '1000',
             'temperature': '0.7',
-            'subscription_type': 'api'  # api, pro, team, or enterprise
+            'subscription_type': 'api',  # api, pro, team, or enterprise
+            'use_memory': 'true',
+            'memory_user_id': 'default_user',
+            'webhook_enabled': 'false',
+            'webhook_host': 'localhost',
+            'webhook_port': '8080'
         }
         
         config['PRO_FEATURES'] = {
@@ -88,6 +112,17 @@ class ClaudeCLI:
         self.max_tokens = config.getint('DEFAULT', 'max_tokens', fallback=1000)
         self.temperature = config.getfloat('DEFAULT', 'temperature', fallback=0.7)
         self.subscription_type = config.get('DEFAULT', 'subscription_type', fallback='api')
+        self.use_memory = config.getboolean('DEFAULT', 'use_memory', fallback=True)
+        memory_user_id = config.get('DEFAULT', 'memory_user_id', fallback='default_user')
+        
+        # Initialize memory with user ID
+        if self.use_memory:
+            self.memory = ClaudeMemory(memory_user_id)
+        
+        # Initialize webhook settings
+        self.webhook_enabled = config.getboolean('DEFAULT', 'webhook_enabled', fallback=False)
+        self.webhook_host = config.get('DEFAULT', 'webhook_host', fallback='localhost')
+        self.webhook_port = config.getint('DEFAULT', 'webhook_port', fallback=8080)
 
     def setup_api_key(self, api_key):
         """Setup API key in config file"""
@@ -100,9 +135,153 @@ class ClaudeCLI:
         
         self.api_key = api_key
         print("API key saved successfully!")
+    
+    def start_webhook_server(self):
+        """Start the webhook server for n8n integration"""
+        if self.webhook_server and self.webhook_server.is_running():
+            print("🌐 Webhook server is already running")
+            return True
+        
+        try:
+            self.webhook_server = ClaudeWebhookServer(
+                claude_instance=self,
+                host=self.webhook_host,
+                port=self.webhook_port
+            )
+            
+            if self.webhook_server.start():
+                self.webhook_enabled = True
+                print("✅ Webhook server started successfully")
+                return True
+            else:
+                print("❌ Failed to start webhook server")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error starting webhook server: {e}")
+            return False
+    
+    def stop_webhook_server(self):
+        """Stop the webhook server"""
+        if self.webhook_server and self.webhook_server.is_running():
+            self.webhook_server.stop()
+            self.webhook_enabled = False
+            print("🛑 Webhook server stopped")
+            return True
+        else:
+            print("🌐 Webhook server is not running")
+            return False
+    
+    def get_webhook_status(self):
+        """Get webhook server status"""
+        if self.webhook_server and self.webhook_server.is_running():
+            return {
+                "status": "running",
+                "host": self.webhook_host,
+                "port": self.webhook_port,
+                "endpoints": [
+                    f"http://{self.webhook_host}:{self.webhook_port}/chat",
+                    f"http://{self.webhook_host}:{self.webhook_port}/status",
+                    f"http://{self.webhook_host}:{self.webhook_port}/memory/stats",
+                    f"http://{self.webhook_host}:{self.webhook_port}/memory/clear",
+                    f"http://{self.webhook_host}:{self.webhook_port}/memory/recall"
+                ]
+            }
+        else:
+            return {
+                "status": "stopped",
+                "host": self.webhook_host,
+                "port": self.webhook_port
+            }
+    
+    def get_mcp_services_status(self):
+        """Get status of all MCP services"""
+        return self.mcp_services.get_service_status()
+    
+    def execute_desktop_command(self, command: str, args: List[str] = None):
+        """Execute desktop command via MCP"""
+        desktop_service = self.mcp_services.get_service('desktop_commander')
+        if desktop_service:
+            return desktop_service.execute_command(command, args)
+        return None
+    
+    def use_toolbox_tool(self, tool_name: str, parameters: Dict = None):
+        """Use a toolbox tool via MCP"""
+        toolbox_service = self.mcp_services.get_service('toolbox')
+        if toolbox_service:
+            return toolbox_service.execute_tool(tool_name, parameters)
+        return None
+    
+    def manage_context(self, action: str, name: str = None, content: str = None, query: str = None):
+        """Manage contexts via Context7 MCP"""
+        context_service = self.mcp_services.get_service('context7')
+        if not context_service:
+            return None
+        
+        if action == 'create' and name and content:
+            return context_service.create_context(name, content)
+        elif action == 'get' and name:
+            return context_service.get_context(name)
+        elif action == 'search' and query:
+            return context_service.search_contexts(query)
+        elif action == 'list':
+            return context_service.list_contexts()
+        elif action == 'delete' and name:
+            return context_service.delete_context(name)
+        
+        return None
+    
+    def create_workflow(self, name: str, description: str) -> str:
+        """Create a new automation workflow"""
+        return self.automation_platform.create_composite_workflow(name, description)
+    
+    def add_workflow_task(self, workflow_id: str, task_type: str, task_name: str, parameters: Dict) -> bool:
+        """Add a task to a workflow"""
+        import time
+        task_id = f"task_{int(time.time())}"
+        task = AutomationTask(
+            id=task_id,
+            name=task_name,
+            type=task_type,
+            parameters=parameters
+        )
+        return self.automation_platform.add_task_to_workflow(workflow_id, task)
+    
+    def execute_workflow(self, workflow_id: str, context: Dict = None) -> Dict:
+        """Execute an automation workflow"""
+        return self.automation_platform.execute_workflow(workflow_id, context)
+    
+    def list_workflows(self) -> List[Dict]:
+        """List all automation workflows"""
+        return self.automation_platform.list_workflows()
+    
+    def get_workflow_status(self, workflow_id: str) -> Dict:
+        """Get workflow status"""
+        return self.automation_platform.get_workflow_status(workflow_id)
+    
+    def get_shared_memory(self) -> Dict:
+        """Get automation platform shared memory"""
+        return self.automation_platform.get_shared_memory()
+    
+    def update_shared_memory(self, updates: Dict) -> None:
+        """Update automation platform shared memory"""
+        self.automation_platform.update_shared_memory(updates)
+    
+    def create_quick_workflow(self, name: str, tasks: List[Dict]) -> str:
+        """Create and execute a quick workflow"""
+        workflow_id = self.create_workflow(name, f"Quick workflow: {name}")
+        
+        for i, task_def in enumerate(tasks):
+            task_name = task_def.get('name', f"Task {i+1}")
+            task_type = task_def.get('type', 'claude')
+            parameters = task_def.get('parameters', {})
+            
+            self.add_workflow_task(workflow_id, task_type, task_name, parameters)
+        
+        return workflow_id
 
-    def chat(self, message, system_prompt=None, model=None):
-        """Send a message to Claude and get response"""
+    def chat(self, message, system_prompt=None, model=None, save_to_memory=True):
+        """Send a message to Claude and get response with memory integration"""
         if not self.api_key:
             print("Error: No API key found. Please set up your API key first.")
             print("\n🔑 TWO WAYS TO GET CLAUDE ACCESS:")
@@ -117,13 +296,20 @@ class ClaudeCLI:
             print("   • Note: Separate from API access")
             return None
 
+        # Get memory context if enabled
+        enhanced_message = message
+        if self.use_memory and hasattr(self, 'memory'):
+            memory_context = self.memory.get_conversation_context(message)
+            if memory_context:
+                enhanced_message = f"{memory_context}\n\nCurrent message: {message}"
+
         headers = {
             'Content-Type': 'application/json',
             'x-api-key': self.api_key,
             'anthropic-version': '2023-06-01'
         }
 
-        messages = [{"role": "user", "content": message}]
+        messages = [{"role": "user", "content": enhanced_message}]
         
         # Use provided model or default
         current_model = model or self.model
@@ -143,7 +329,17 @@ class ClaudeCLI:
             response.raise_for_status()
             
             result = response.json()
-            return result['content'][0]['text']
+            claude_response = result['content'][0]['text']
+            
+            # Save conversation to memory if enabled
+            if self.use_memory and hasattr(self, 'memory') and save_to_memory:
+                conversation = [
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": claude_response}
+                ]
+                self.memory.save_conversation(conversation, context=system_prompt or "")
+            
+            return claude_response
             
         except requests.exceptions.RequestException as e:
             if "unauthorized" in str(e).lower():
@@ -271,6 +467,22 @@ Always provide practical, working code examples when appropriate."""
                     print("• model <name> - Switch Claude model")
                     print("• models - Show available models")
                     print("• info - Show subscription information")
+                    print("• memory stats - Show memory usage statistics")
+                    print("• memory clear - Clear all memories")
+                    print("• memory toggle - Toggle memory on/off")
+                    print("• memory recall <query> - Search memories")
+                    print("• webhook start - Start webhook server for n8n")
+                    print("• webhook stop - Stop webhook server")
+                    print("• webhook status - Show webhook status")
+                    print("• mcp status - Show MCP services status")
+                    print("• mcp desktop <command> - Execute desktop command")
+                    print("• mcp toolbox <tool> - Use toolbox tool")
+                    print("• mcp context <action> - Manage contexts")
+                    print("• workflow list - List all workflows")
+                    print("• workflow create <name> - Create new workflow")
+                    print("• workflow execute <id> - Execute workflow")
+                    print("• workflow status <id> - Get workflow status")
+                    print("• memory shared - Show shared automation memory")
                     continue
                 
                 if user_input.lower() == 'models':
@@ -291,6 +503,249 @@ Always provide practical, working code examples when appropriate."""
                         for model_id in self.available_models:
                             print(f"   • {model_id}")
                     continue
+                
+                # Memory management commands
+                if user_input.lower().startswith('memory '):
+                    memory_cmd = user_input[7:].strip().lower()
+                    
+                    if memory_cmd == 'stats':
+                        if hasattr(self, 'memory'):
+                            stats = self.memory.get_memory_stats()
+                            print(f"\n🧠 Memory Statistics:")
+                            print(f"• Total memories: {stats.get('total_memories', 0)}")
+                            print(f"• Conversations: {stats.get('conversations', 0)}")
+                            print(f"• Last updated: {stats.get('last_updated', 'Never')}")
+                            print(f"• User ID: {stats.get('user_id', 'Unknown')}")
+                            print(f"• Memory enabled: {self.use_memory}")
+                        else:
+                            print("❌ Memory system not available")
+                    
+                    elif memory_cmd == 'clear':
+                        if hasattr(self, 'memory'):
+                            if self.memory.clear_memories():
+                                print("✅ All memories cleared")
+                            else:
+                                print("❌ Failed to clear memories")
+                        else:
+                            print("❌ Memory system not available")
+                    
+                    elif memory_cmd == 'toggle':
+                        self.use_memory = not self.use_memory
+                        status = "enabled" if self.use_memory else "disabled"
+                        print(f"🧠 Memory {status}")
+                    
+                    elif memory_cmd.startswith('recall '):
+                        query = memory_cmd[7:].strip()
+                        if hasattr(self, 'memory') and query:
+                            memories = self.memory.recall_memories(query)
+                            if memories:
+                                print(f"\n🔍 Found {len(memories)} relevant memories:")
+                                for i, memory in enumerate(memories, 1):
+                                    print(f"{i}. {memory.get('content', 'No content')}")
+                                    print(f"   Relevance: {memory.get('relevance', 0):.2f}")
+                            else:
+                                print("No relevant memories found")
+                        else:
+                            print("❌ Please provide a search query")
+                    
+                    else:
+                        print("❌ Unknown memory command. Use: stats, clear, toggle, or recall <query>")
+                    
+                    continue
+                
+                # Webhook management commands
+                if user_input.lower().startswith('webhook '):
+                    webhook_cmd = user_input[8:].strip().lower()
+                    
+                    if webhook_cmd == 'start':
+                        self.start_webhook_server()
+                    
+                    elif webhook_cmd == 'stop':
+                        self.stop_webhook_server()
+                    
+                    elif webhook_cmd == 'status':
+                        status = self.get_webhook_status()
+                        print(f"\n🌐 Webhook Server Status:")
+                        print(f"• Status: {status['status']}")
+                        print(f"• Host: {status['host']}")
+                        print(f"• Port: {status['port']}")
+                        if status['status'] == 'running':
+                            print(f"• Available endpoints:")
+                            for endpoint in status['endpoints']:
+                                print(f"  - {endpoint}")
+                    
+                    else:
+                        print("❌ Unknown webhook command. Use: start, stop, or status")
+                    
+                    continue
+                
+                # MCP services commands
+                if user_input.lower().startswith('mcp '):
+                    mcp_cmd = user_input[4:].strip()
+                    
+                    if mcp_cmd == 'status':
+                        status = self.get_mcp_services_status()
+                        print(f"\n🔧 MCP Services Status:")
+                        for service_name, service_status in status.items():
+                            available = "✅" if service_status['available'] else "❌"
+                            configured = "✅" if service_status['configured'] else "❌"
+                            print(f"• {service_name}:")
+                            print(f"  - Available: {available}")
+                            print(f"  - Configured: {configured}")
+                            print(f"  - Description: {service_status['description']}")
+                    
+                    elif mcp_cmd.startswith('desktop '):
+                        command = mcp_cmd[8:].strip()
+                        if command:
+                            result = self.execute_desktop_command(command)
+                            if result:
+                                print(f"✅ Desktop command executed: {result.get('result', 'Success')}")
+                            else:
+                                print("❌ Failed to execute desktop command")
+                        else:
+                            print("❌ Please provide a command to execute")
+                    
+                    elif mcp_cmd.startswith('toolbox '):
+                        tool_spec = mcp_cmd[8:].strip()
+                        if tool_spec:
+                            # Parse tool name and parameters
+                            parts = tool_spec.split(' ', 1)
+                            tool_name = parts[0]
+                            params = {}
+                            if len(parts) > 1:
+                                try:
+                                    params = json.loads(parts[1])
+                                except:
+                                    params = {"input": parts[1]}
+                            
+                            result = self.use_toolbox_tool(tool_name, params)
+                            if result:
+                                print(f"✅ Toolbox tool executed: {result.get('result', 'Success')}")
+                            else:
+                                print("❌ Failed to execute toolbox tool")
+                        else:
+                            print("❌ Please provide a tool name")
+                    
+                    elif mcp_cmd.startswith('context '):
+                        context_spec = mcp_cmd[8:].strip()
+                        parts = context_spec.split(' ', 2)
+                        
+                        if len(parts) >= 1:
+                            action = parts[0]
+                            
+                            if action == 'list':
+                                result = self.manage_context('list')
+                                if result:
+                                    print("📋 Available contexts:")
+                                    contexts = result.get('result', [])
+                                    for ctx in contexts:
+                                        print(f"  • {ctx}")
+                                else:
+                                    print("❌ Failed to list contexts")
+                            
+                            elif action == 'search' and len(parts) >= 2:
+                                query = ' '.join(parts[1:])
+                                result = self.manage_context('search', query=query)
+                                if result:
+                                    print(f"🔍 Search results for '{query}':")
+                                    results = result.get('result', [])
+                                    for res in results:
+                                        print(f"  • {res}")
+                                else:
+                                    print("❌ Failed to search contexts")
+                            
+                            elif action == 'get' and len(parts) >= 2:
+                                name = parts[1]
+                                result = self.manage_context('get', name=name)
+                                if result:
+                                    print(f"📄 Context '{name}':")
+                                    print(result.get('result', 'No content'))
+                                else:
+                                    print(f"❌ Failed to get context '{name}'")
+                            
+                            else:
+                                print("❌ Context commands: list, search <query>, get <name>")
+                        else:
+                            print("❌ Please provide a context action")
+                    
+                    else:
+                        print("❌ Unknown MCP command. Use: status, desktop <cmd>, toolbox <tool>, context <action>")
+                    
+                    continue
+                
+                # Workflow management commands
+                if user_input.lower().startswith('workflow '):
+                    workflow_cmd = user_input[9:].strip()
+                    
+                    if workflow_cmd == 'list':
+                        workflows = self.list_workflows()
+                        if workflows:
+                            print(f"\n🔄 Available Workflows:")
+                            for wf in workflows:
+                                status = "✅ Enabled" if wf['enabled'] else "❌ Disabled"
+                                print(f"• {wf['id']}: {wf['name']} ({wf['task_count']} tasks) - {status}")
+                                print(f"  Description: {wf['description']}")
+                        else:
+                            print("No workflows found")
+                    
+                    elif workflow_cmd.startswith('create '):
+                        name = workflow_cmd[7:].strip()
+                        if name:
+                            workflow_id = self.create_workflow(name, f"Interactive workflow: {name}")
+                            print(f"✅ Created workflow: {workflow_id}")
+                        else:
+                            print("❌ Please provide a workflow name")
+                    
+                    elif workflow_cmd.startswith('execute '):
+                        workflow_id = workflow_cmd[8:].strip()
+                        if workflow_id:
+                            print(f"🔄 Executing workflow: {workflow_id}")
+                            result = self.execute_workflow(workflow_id)
+                            if result.get('status') == 'completed':
+                                print(f"✅ Workflow completed in {result.get('duration', 0):.2f}s")
+                                print(f"Results: {len(result.get('results', {}))} tasks executed")
+                            else:
+                                print(f"❌ Workflow failed: {result.get('error', 'Unknown error')}")
+                        else:
+                            print("❌ Please provide a workflow ID")
+                    
+                    elif workflow_cmd.startswith('status '):
+                        workflow_id = workflow_cmd[7:].strip()
+                        if workflow_id:
+                            status = self.get_workflow_status(workflow_id)
+                            if 'error' not in status:
+                                print(f"\n📊 Workflow Status: {status['name']}")
+                                print(f"• ID: {status['id']}")
+                                print(f"• Description: {status['description']}")
+                                print(f"• Enabled: {status['enabled']}")
+                                print(f"• Tasks: {status['task_count']}")
+                                if status['tasks']:
+                                    print("• Task Details:")
+                                    for task in status['tasks']:
+                                        print(f"  - {task['name']} ({task['type']}) - {task['status']}")
+                            else:
+                                print(f"❌ {status['error']}")
+                        else:
+                            print("❌ Please provide a workflow ID")
+                    
+                    else:
+                        print("❌ Unknown workflow command. Use: list, create <name>, execute <id>, status <id>")
+                    
+                    continue
+                
+                # Shared memory commands
+                if user_input.lower().startswith('memory '):
+                    memory_cmd = user_input[7:].strip().lower()
+                    
+                    if memory_cmd == 'shared':
+                        shared_mem = self.get_shared_memory()
+                        if shared_mem:
+                            print(f"\n🧠 Shared Automation Memory:")
+                            for key, value in shared_mem.items():
+                                print(f"• {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
+                        else:
+                            print("Shared memory is empty")
+                        continue
                 
                 if not user_input:
                     continue
@@ -356,6 +811,21 @@ Examples:
     parser.add_argument('--info', action='store_true', help='Show Claude subscription information')
     parser.add_argument('--squad', action='store_true', help='Start Claude Squad simulation mode')
     parser.add_argument('--code', action='store_true', help='Start Claude Code simulation mode')
+    parser.add_argument('--memory-stats', action='store_true', help='Show memory usage statistics')
+    parser.add_argument('--memory-clear', action='store_true', help='Clear all memories')
+    parser.add_argument('--memory-recall', help='Search and recall memories by query')
+    parser.add_argument('--webhook-start', action='store_true', help='Start webhook server for n8n integration')
+    parser.add_argument('--webhook-stop', action='store_true', help='Stop webhook server')
+    parser.add_argument('--webhook-status', action='store_true', help='Show webhook server status')
+    parser.add_argument('--mcp-status', action='store_true', help='Show MCP services status')
+    parser.add_argument('--mcp-desktop', help='Execute desktop command via MCP')
+    parser.add_argument('--mcp-toolbox', help='Use toolbox tool via MCP')
+    parser.add_argument('--mcp-context', nargs='+', help='Manage contexts via MCP (action [args])')
+    parser.add_argument('--workflow-list', action='store_true', help='List all automation workflows')
+    parser.add_argument('--workflow-create', nargs=2, metavar=('NAME', 'DESCRIPTION'), help='Create new workflow')
+    parser.add_argument('--workflow-execute', help='Execute workflow by ID')
+    parser.add_argument('--workflow-status', help='Get workflow status by ID')
+    parser.add_argument('--automation-memory', action='store_true', help='Show shared automation memory')
     
     args = parser.parse_args()
     
@@ -385,6 +855,185 @@ Examples:
     
     if args.code:
         claude.simulate_code_features()
+        return
+    
+    if args.memory_stats:
+        if hasattr(claude, 'memory'):
+            stats = claude.memory.get_memory_stats()
+            print(f"\n🧠 Memory Statistics:")
+            print(f"• Total memories: {stats.get('total_memories', 0)}")
+            print(f"• Conversations: {stats.get('conversations', 0)}")
+            print(f"• Last updated: {stats.get('last_updated', 'Never')}")
+            print(f"• User ID: {stats.get('user_id', 'Unknown')}")
+            print(f"• Memory enabled: {claude.use_memory}")
+        else:
+            print("❌ Memory system not available")
+        return
+    
+    if args.memory_clear:
+        if hasattr(claude, 'memory'):
+            if claude.memory.clear_memories():
+                print("✅ All memories cleared")
+            else:
+                print("❌ Failed to clear memories")
+        else:
+            print("❌ Memory system not available")
+        return
+    
+    if args.memory_recall:
+        if hasattr(claude, 'memory'):
+            memories = claude.memory.recall_memories(args.memory_recall)
+            if memories:
+                print(f"\n🔍 Found {len(memories)} relevant memories:")
+                for i, memory in enumerate(memories, 1):
+                    print(f"{i}. {memory.get('content', 'No content')}")
+                    print(f"   Relevance: {memory.get('relevance', 0):.2f}")
+            else:
+                print("No relevant memories found")
+        else:
+            print("❌ Memory system not available")
+        return
+    
+    if args.webhook_start:
+        claude.start_webhook_server()
+        return
+    
+    if args.webhook_stop:
+        claude.stop_webhook_server()
+        return
+    
+    if args.webhook_status:
+        status = claude.get_webhook_status()
+        print(f"\n🌐 Webhook Server Status:")
+        print(f"• Status: {status['status']}")
+        print(f"• Host: {status['host']}")
+        print(f"• Port: {status['port']}")
+        if status['status'] == 'running':
+            print(f"• Available endpoints:")
+            for endpoint in status['endpoints']:
+                print(f"  - {endpoint}")
+        return
+    
+    if args.mcp_status:
+        status = claude.get_mcp_services_status()
+        print(f"\n🔧 MCP Services Status:")
+        for service_name, service_status in status.items():
+            available = "✅" if service_status['available'] else "❌"
+            configured = "✅" if service_status['configured'] else "❌"
+            print(f"• {service_name}:")
+            print(f"  - Available: {available}")
+            print(f"  - Configured: {configured}")
+            print(f"  - Description: {service_status['description']}")
+        return
+    
+    if args.mcp_desktop:
+        result = claude.execute_desktop_command(args.mcp_desktop)
+        if result:
+            print(f"✅ Desktop command executed: {result.get('result', 'Success')}")
+        else:
+            print("❌ Failed to execute desktop command")
+        return
+    
+    if args.mcp_toolbox:
+        result = claude.use_toolbox_tool(args.mcp_toolbox)
+        if result:
+            print(f"✅ Toolbox tool executed: {result.get('result', 'Success')}")
+        else:
+            print("❌ Failed to execute toolbox tool")
+        return
+    
+    if args.mcp_context:
+        if len(args.mcp_context) >= 1:
+            action = args.mcp_context[0]
+            
+            if action == 'list':
+                result = claude.manage_context('list')
+                if result:
+                    print("📋 Available contexts:")
+                    contexts = result.get('result', [])
+                    for ctx in contexts:
+                        print(f"  • {ctx}")
+                else:
+                    print("❌ Failed to list contexts")
+            
+            elif action == 'search' and len(args.mcp_context) >= 2:
+                query = ' '.join(args.mcp_context[1:])
+                result = claude.manage_context('search', query=query)
+                if result:
+                    print(f"🔍 Search results for '{query}':")
+                    results = result.get('result', [])
+                    for res in results:
+                        print(f"  • {res}")
+                else:
+                    print("❌ Failed to search contexts")
+            
+            elif action == 'get' and len(args.mcp_context) >= 2:
+                name = args.mcp_context[1]
+                result = claude.manage_context('get', name=name)
+                if result:
+                    print(f"📄 Context '{name}':")
+                    print(result.get('result', 'No content'))
+                else:
+                    print(f"❌ Failed to get context '{name}'")
+            
+            else:
+                print("❌ Context commands: list, search <query>, get <name>")
+        else:
+            print("❌ Please provide a context action")
+        return
+    
+    if args.workflow_list:
+        workflows = claude.list_workflows()
+        if workflows:
+            print(f"\n🔄 Available Workflows:")
+            for wf in workflows:
+                status = "✅ Enabled" if wf['enabled'] else "❌ Disabled"
+                print(f"• {wf['id']}: {wf['name']} ({wf['task_count']} tasks) - {status}")
+                print(f"  Description: {wf['description']}")
+        else:
+            print("No workflows found")
+        return
+    
+    if args.workflow_create:
+        name, description = args.workflow_create
+        workflow_id = claude.create_workflow(name, description)
+        print(f"✅ Created workflow: {workflow_id}")
+        return
+    
+    if args.workflow_execute:
+        print(f"🔄 Executing workflow: {args.workflow_execute}")
+        result = claude.execute_workflow(args.workflow_execute)
+        if result.get('status') == 'completed':
+            print(f"✅ Workflow completed in {result.get('duration', 0):.2f}s")
+            print(f"Results: {len(result.get('results', {}))} tasks executed")
+        else:
+            print(f"❌ Workflow failed: {result.get('error', 'Unknown error')}")
+        return
+    
+    if args.workflow_status:
+        status = claude.get_workflow_status(args.workflow_status)
+        if 'error' not in status:
+            print(f"\n📊 Workflow Status: {status['name']}")
+            print(f"• ID: {status['id']}")
+            print(f"• Description: {status['description']}")
+            print(f"• Enabled: {status['enabled']}")
+            print(f"• Tasks: {status['task_count']}")
+            if status['tasks']:
+                print("• Task Details:")
+                for task in status['tasks']:
+                    print(f"  - {task['name']} ({task['type']}) - {task['status']}")
+        else:
+            print(f"❌ {status['error']}")
+        return
+    
+    if args.automation_memory:
+        shared_mem = claude.get_shared_memory()
+        if shared_mem:
+            print(f"\n🧠 Shared Automation Memory:")
+            for key, value in shared_mem.items():
+                print(f"• {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
+        else:
+            print("Shared memory is empty")
         return
     
     if args.interactive:
