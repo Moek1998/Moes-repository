@@ -19,6 +19,8 @@ class ClaudeCLI:
         self.api_key = None
         self.api_url = "https://api.anthropic.com/v1/messages"
         
+        self.session = requests.Session()
+        
         # Available Claude models
         self.available_models = {
             'claude-3-5-sonnet-20241022': 'Claude 3.5 Sonnet (Latest)',
@@ -134,7 +136,7 @@ class ClaudeCLI:
             data['system'] = system_prompt
 
         try:
-            response = requests.post(self.api_url, headers=headers, json=data)
+            response = self.session.post(self.api_url, headers=headers, json=data, timeout=(10, 30))
             response.raise_for_status()
             
             result = response.json()
