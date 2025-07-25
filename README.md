@@ -22,6 +22,7 @@ A command-line interface for interacting with Claude AI from Anthropic. Run `cla
 - 🖥️ Cross-platform support (Linux, WSL, Windows)
 - 📝 System prompts support
 - ⚡ Fast and lightweight
+- 🔌 MCP (Model Context Protocol) server support
 
 ## Installation
 
@@ -97,180 +98,263 @@ claude -m claude-3-opus-20240229 "Explain quantum computing"
 # Ask with a system prompt
 claude -s "You are a helpful coding assistant" "How do I reverse a string in Python?"
 
-# Start interactive mode
+# Interactive chat mode
 claude -i
 
-# Claude Squad simulation (team collaboration)
+# Claude Squad mode (team collaboration)
 claude --squad
 
-# Claude Code simulation (coding assistant)
+# Claude Code mode (advanced coding)
 claude --code
 
 # Show available models
 claude --models
 
-# Show Claude subscription info
-claude --info
-
-# Show config and help
+# Configure settings
 claude --config
-claude --help
 ```
-
-### 🎯 Special Modes
-
-#### Claude Squad Simulator
-```bash
-claude --squad
-```
-Simulates Claude Pro's Squad features:
-- Team collaboration interface
-- Shared conversation history
-- Enhanced context management
-- Multiple AI personas
-
-#### Claude Code Simulator
-```bash
-claude --code
-```
-Simulates Claude Pro's Code features:
-- Expert programming assistant
-- Code review and optimization
-- Multi-language support
-- Best practices guidance
 
 ### Interactive Mode
 
+Start an interactive conversation with Claude:
+
 ```bash
 claude -i
 ```
 
-Enhanced interactive features:
-- Type messages and get responses
-- `exit` or `quit` to leave
-- `clear` to clear screen and history
-- `help` for available commands
-- `models` to show available models
-- `info` for subscription information
-- `model <name>` to switch models
-- Use Ctrl+C to exit
+In interactive mode:
+- Type your messages and press Enter
+- Use `/exit` or `/quit` to leave
+- Use `/clear` to clear conversation history
+- Use `/save filename` to save conversation
+- Use `/load filename` to load a previous conversation
+- Use `/model model-name` to switch models mid-conversation
+- Use `/system "prompt"` to set a system prompt
+- Use `/squad` to switch to Squad mode
+- Use `/code` to switch to Code mode
 
-### Command Line Options
+### Claude Squad Mode
 
-- `message`: Send a message to Claude (if no message provided, starts interactive mode)
-- `-i, --interactive`: Start interactive mode explicitly
-- `-s, --system`: Provide a system prompt
-- `-m, --model`: Specify Claude model to use
-- `--squad`: Start Squad simulation mode
-- `--code`: Start Code simulation mode
-- `--models`: Show available models
-- `--info`: Show Claude subscription information
-- `--setup-key`: Set up your API key
-- `--config`: Show config file location
-- `--help`: Show help message
+Experience team collaboration features:
 
-## Configuration
-
-The CLI stores configuration in `~/.claude/config.ini`:
-
-```ini
-[DEFAULT]
-api_key = your_api_key_here
-model = claude-3-sonnet-20240229
-max_tokens = 1000
+```bash
+claude --squad
 ```
 
-You can edit this file to change:
-- `model`: The Claude model to use
-- `max_tokens`: Maximum tokens in responses
-- `api_key`: Your Anthropic API key (optional if using environment variable)
+Squad mode provides:
+- Multiple AI perspectives on problems
+- Collaborative brainstorming
+- Role-based responses (researcher, analyst, creative, etc.)
+- Team decision-making simulation
 
-## 🤖 Available Models
+### Claude Code Mode
 
-This CLI supports all Claude models:
+Advanced coding assistance:
 
-| Model | Description | Best For |
-|-------|-------------|----------|
-| `claude-3-5-sonnet-20241022` | Latest & most capable | General use, coding, analysis |
-| `claude-3-opus-20240229` | Most powerful reasoning | Complex tasks, research |
-| `claude-3-sonnet-20240229` | Balanced performance | Most applications |
-| `claude-3-haiku-20240307` | Fastest & cheapest | Quick responses, high volume |
-| `claude-2.1` | Legacy model | Established workflows |
+```bash
+claude --code
+```
 
-## 🎯 Understanding Claude Access Types
+Code mode offers:
+- Enhanced code analysis and generation
+- Project-aware suggestions
+- Code review and optimization
+- Multi-language support
+- Architecture recommendations
 
-| Access Type | Cost | What You Get | How to Access |
-|-------------|------|--------------|---------------|
-| **Claude Free** | Free | Limited daily usage | [claude.ai](https://claude.ai) |
-| **Claude Pro** | $20/month | 5x usage, Squad, Code, priority | [claude.ai](https://claude.ai) |
-| **Claude Team** | $25/user/month | Team features, admin tools | Contact Anthropic |
-| **Claude Enterprise** | Custom | SSO, security, custom training | Contact Anthropic |
-| **API Access** | Pay-per-use | Developer integrations, this CLI | [console.anthropic.com](https://console.anthropic.com) |
+### Configuration
+
+View and modify settings:
+
+```bash
+claude --config
+```
+
+Available settings:
+- `model`: Default Claude model to use
+- `temperature`: Response creativity (0.0-1.0)
+- `max_tokens`: Maximum response length
+- `api_key`: Your Anthropic API key
+- `system_prompt`: Default system prompt
+
+### Models
+
+View available models:
+
+```bash
+claude --models
+```
+
+Supported models:
+- `claude-3-5-sonnet-20241022` (Latest, most capable)
+- `claude-3-5-sonnet-20240620` (Previous version)
+- `claude-3-opus-20240229` (Most powerful, slower)
+- `claude-3-sonnet-20240229` (Balanced)
+- `claude-3-haiku-20240307` (Fastest, most economical)
+
+## Advanced Features
+
+### System Prompts
+
+Customize Claude's behavior with system prompts:
+
+```bash
+# Use a predefined system prompt
+claude -s "You are a helpful coding assistant specializing in Python" "How do I optimize this function?"
+
+# Set a persistent system prompt
+claude --config
+# Then edit the system_prompt setting
+```
+
+### Conversation Management
+
+Save and load conversations:
+
+```bash
+# In interactive mode
+/save my-conversation
+/load my-conversation
+
+# Or specify full paths
+/save /path/to/conversations/project-discussion
+```
+
+### Model Switching
+
+Switch models during conversation:
+
+```bash
+# In interactive mode
+/model claude-3-opus-20240229
+```
+
+### Temperature Control
+
+Adjust response creativity:
+
+```bash
+claude -t 0.7 "Write a creative story about AI"  # More creative
+claude -t 0.1 "What is 2+2?"                     # More factual
+```
 
 ## Examples
 
+### Basic Usage
 ```bash
 # Simple question
-claude "Explain quantum computing in simple terms"
+claude "Explain machine learning in simple terms"
 
-# Use the most powerful model
-claude -m claude-3-opus-20240229 "Analyze this complex dataset"
-
-# Coding help with Code simulator
-claude --code
-[Code] You: Write a Python function to find prime numbers
-[Code] Claude: Here's an efficient prime number finder using the Sieve of Eratosthenes...
-
-# Team collaboration with Squad simulator
-claude --squad
-[Squad] You: Help me plan a project roadmap
-[Squad] Claude: I'll help you create a comprehensive project roadmap...
+# Code help
+claude "How do I read a CSV file in Python?"
 
 # Creative writing
-claude -s "You are a creative writer" "Write a short story about a robot learning to paint"
+claude -t 0.8 "Write a short poem about programming"
+```
 
-# Interactive coding session
+### Interactive Sessions
+```bash
+# Start interactive mode
 claude -i
-You: I need help with a React component
-Claude: I'd be happy to help you with your React component! What specific functionality are you trying to implement?
-You: I want to create a todo list
-Claude: Great! Here's a simple todo list component...
+
+# Example conversation:
+> Hello! I'm working on a Python project and need help with error handling.
+> /system "You are an expert Python developer focused on best practices"
+> Can you show me the best way to handle file operations with proper exception handling?
+> /save python-error-handling
+> /exit
+```
+
+### Squad Collaboration
+```bash
+# Start Squad mode
+claude --squad
+
+# Example usage:
+> I need to design a new mobile app. Can the team help brainstorm features?
+# Squad will provide multiple perspectives: UX designer, developer, product manager, etc.
+```
+
+### Code Analysis
+```bash
+# Start Code mode
+claude --code
+
+# Example usage:
+> Can you review this Python function and suggest improvements?
+> [paste your code]
+# Code mode provides detailed analysis, optimization suggestions, and best practices
 ```
 
 ## Troubleshooting
 
-### "claude: command not found"
+### Common Issues
 
-The installation directory is not in your PATH. Add it:
+1. **API Key Issues**
+   ```bash
+   # Verify your API key is set
+   claude --config
+   
+   # Re-set your API key
+   claude --setup-key your_new_api_key
+   ```
 
-**Linux/WSL:**
-```bash
-echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
-source ~/.bashrc
+2. **Permission Errors (Linux/WSL)**
+   ```bash
+   # Make sure the script is executable
+   chmod +x ~/.local/bin/claude
+   
+   # Check if the directory is in PATH
+   echo $PATH | grep -o ~/.local/bin
+   ```
+
+3. **Python Dependencies**
+   ```bash
+   # Reinstall dependencies
+   pip install -r requirements.txt --upgrade
+   ```
+
+4. **Rate Limiting**
+   - The CLI respects Anthropic's rate limits
+   - If you encounter rate limit errors, wait a moment before retrying
+   - Consider using a less powerful model (like Haiku) for simple queries
+
+### Error Messages
+
+- **"API key not found"**: Set your API key using one of the setup methods
+- **"Invalid model"**: Use `claude --models` to see available models
+- **"Rate limit exceeded"**: Wait and retry, or check your API usage
+- **"Network error"**: Check your internet connection
+
+## Development
+
+### Project Structure
+```
+claude-cli/
+├── src/
+│   ├── claude.py          # Main CLI script
+│   └── requirements.txt   # Python dependencies
+├── tools/
+│   └── claude            # Executable wrapper
+├── scripts/
+│   └── scripts.zip       # Installation scripts
+├── .claude/
+│   └── CLAUDE.md         # Documentation
+└── README.md
 ```
 
-**Windows:**
-Add `%USERPROFILE%\.local\bin` to your PATH environment variable.
+### Contributing
 
-### "No API key found"
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-Set up your API key:
-```bash
-claude --setup-key your_api_key_here
-```
+### Requirements
 
-Or set the environment variable:
-```bash
-export ANTHROPIC_API_KEY=your_api_key_here
-```
-
-### Python/pip not found
-
-Install Python 3.7+ from [python.org](https://python.org) and ensure it's in your PATH.
-
-## Requirements
-
-- Python 3.7 or higher
+- Python 3.7+
+- `anthropic` library (for API access)
 - `requests` library
 - Valid Anthropic API key
 
