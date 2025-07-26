@@ -6,18 +6,16 @@ Supports both API access and Claude Pro features where possible
 
 import sys
 import os
-import argparse
 import json
-import requests
 from pathlib import Path
 import configparser
+from .client import ClaudeClient
 
 class ClaudeCLI:
     def __init__(self):
         self.config_dir = Path.home() / '.claude'
         self.config_file = self.config_dir / 'config.ini'
         self.api_key = None
-        self.api_url = "https://api.anthropic.com/v1/messages"
         
         # Available Claude models
         self.available_models = {
@@ -99,6 +97,7 @@ class ClaudeCLI:
             config.write(f)
         
         self.api_key = api_key
+        self.client.api_key = api_key
         print("API key saved successfully!")
 
     def chat(self, message, system_prompt=None, model=None):
@@ -117,46 +116,18 @@ class ClaudeCLI:
             print("   • Note: Separate from API access")
             return None
 
-        headers = {
-            'Content-Type': 'application/json',
-            'x-api-key': self.api_key,
-            'anthropic-version': '2023-06-01'
-        }
-
         messages = [{"role": "user", "content": message}]
         
         # Use provided model or default
         current_model = model or self.model
         
-        data = {
-            'model': current_model,
-            'max_tokens': self.max_tokens,
-            'messages': messages,
-            'temperature': self.temperature
-        }
-        
-        if system_prompt:
-            data['system'] = system_prompt
-
-        try:
-            response = requests.post(self.api_url, headers=headers, json=data)
-            response.raise_for_status()
-            
-            result = response.json()
-            return result['content'][0]['text']
-            
-        except requests.exceptions.RequestException as e:
-            if "unauthorized" in str(e).lower():
-                print("❌ API key invalid or expired. Get a new one at: https://console.anthropic.com/")
-            elif "rate_limit" in str(e).lower():
-                print("⏰ Rate limit reached. Consider upgrading your API plan.")
-            else:
-                print(f"Error making request: {e}")
-            return None
-        except KeyError as e:
-            print(f"Error parsing response: {e}")
-            print(f"Response: {response.text}")
-            return None
+        return self.client.send_message(
+            model=current_model,
+            max_tokens=self.max_tokens,
+            messages=messages,
+            temperature=self.temperature,
+            system_prompt=system_prompt
+        )
 
     def show_subscription_info(self):
         """Show information about Claude subscription types"""
@@ -331,81 +302,6 @@ Always provide practical, working code examples when appropriate."""
         """Start interactive chat mode"""
         return self.interactive_mode_enhanced()
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Claude CLI - Interact with Claude AI from the command line',
-        epilog="""
-Examples:
-  claude "Hello Claude!"                    # Quick question
-  claude -i                                # Interactive mode  
-  claude --squad                           # Squad simulation mode
-  claude --code                            # Code assistant mode
-  claude -m claude-3-opus-20240229 "Help"  # Use specific model
-  claude --info                            # Show subscription info
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    
-    parser.add_argument('message', nargs='*', help='Message to send to Claude')
-    parser.add_argument('-i', '--interactive', action='store_true', help='Start interactive mode')
-    parser.add_argument('-s', '--system', help='System prompt for the conversation')
-    parser.add_argument('-m', '--model', help='Claude model to use')
-    parser.add_argument('--setup-key', help='Setup API key')
-    parser.add_argument('--config', action='store_true', help='Show config file location')
-    parser.add_argument('--models', action='store_true', help='Show available models')
-    parser.add_argument('--info', action='store_true', help='Show Claude subscription information')
-    parser.add_argument('--squad', action='store_true', help='Start Claude Squad simulation mode')
-    parser.add_argument('--code', action='store_true', help='Start Claude Code simulation mode')
-    
-    args = parser.parse_args()
-    
-    claude = ClaudeCLI()
-    
-    if args.setup_key:
-        claude.setup_api_key(args.setup_key)
-        return
-    
-    if args.config:
-        print(f"📂 Config file location: {claude.config_file}")
-        print(f"📊 Current model: {claude.model}")
-        print(f"🔑 API key configured: {'Yes' if claude.api_key else 'No'}")
-        return
-    
-    if args.models:
-        claude.show_models()
-        return
-    
-    if args.info:
-        claude.show_subscription_info()
-        return
-    
-    if args.squad:
-        claude.simulate_squad_features()
-        return
-    
-    if args.code:
-        claude.simulate_code_features()
-        return
-    
-    if args.interactive:
-        claude.interactive_mode()
-        return
-    
-    if args.message:
-        message = ' '.join(args.message)
-        response = claude.chat(message, args.system, args.model)
-        if response:
-            print(response)
-    else:
-        # If no message provided, show help and start interactive mode
-        print("🤖 Claude CLI - AI Assistant")
-        print("=" * 30)
-        print("💡 Tip: Run 'claude --info' to learn about Claude Pro features")
-        print("🔧 Tip: Run 'claude --models' to see available models")
-        print("👥 Tip: Run 'claude --squad' for team collaboration features")
-        print("💻 Tip: Run 'claude --code' for coding assistance")
-        print("\nStarting interactive mode...\n")
-        claude.interactive_mode()
-
 if __name__ == '__main__':
+    from .cli import main
     main()

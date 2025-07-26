@@ -268,6 +268,13 @@ export ANTHROPIC_API_KEY=your_api_key_here
 
 Install Python 3.7+ from [python.org](https://python.org) and ensure it's in your PATH.
 
+## Running Tests
+
+To run the unit tests, run:
+```bash
+python -m unittest discover tests
+```
+
 ## Requirements
 
 - Python 3.7 or higher
