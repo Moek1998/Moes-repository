@@ -80,8 +80,7 @@ class ClaudeCLI:
         
         # Try to get API key from config file or environment variable
         self.api_key = (
-            os.getenv('ANTHROPIC_API_KEY') or 
-            config.get('DEFAULT', 'api_key', fallback='')
+            os.getenv('ANTHROPIC_API_KEY')
         )
         
         self.model = config.get('DEFAULT', 'model', fallback='claude-3-5-sonnet-20241022')
@@ -91,15 +90,11 @@ class ClaudeCLI:
 
     def setup_api_key(self, api_key):
         """Setup API key in config file"""
-        config = configparser.ConfigParser()
-        config.read(self.config_file)
-        config.set('DEFAULT', 'api_key', api_key)
-        
-        with open(self.config_file, 'w') as f:
-            config.write(f)
-        
-        self.api_key = api_key
-        print("API key saved successfully!")
+        # Storing API keys in config files is insecure.
+        # This function is deprecated.
+        print("Storing API keys in config files is insecure.")
+        print("Please use environment variables instead.")
+        print("Run: export ANTHROPIC_API_KEY='your_api_key'")
 
     def chat(self, message, system_prompt=None, model=None):
         """Send a message to Claude and get response"""
