@@ -6,6 +6,9 @@ from src.client import ClaudeClient
 class TestClaudeClient(unittest.TestCase):
 
     def setUp(self):
+        """
+        Set up a new ClaudeClient instance with a test API key before each test.
+        """
         self.client = ClaudeClient(api_key="test_api_key")
 
     @patch('requests.post')
@@ -29,6 +32,9 @@ class TestClaudeClient(unittest.TestCase):
 
     @patch('requests.post')
     def test_send_message_unauthorized(self, mock_post):
+        """
+        Test that send_message returns None when an unauthorized request exception occurs.
+        """
         mock_response = Mock()
         mock_response.raise_for_status.side_effect = requests.exceptions.RequestException("unauthorized")
         mock_post.return_value = mock_response
@@ -44,6 +50,9 @@ class TestClaudeClient(unittest.TestCase):
 
     @patch('requests.post')
     def test_send_message_rate_limit(self, mock_post):
+        """
+        Test that send_message returns None when a rate limit error occurs during the API request.
+        """
         mock_response = Mock()
         mock_response.raise_for_status.side_effect = requests.exceptions.RequestException("rate_limit")
         mock_post.return_value = mock_response
