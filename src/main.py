@@ -127,7 +127,23 @@ class ClaudeCLI:
             messages=messages,
             temperature=self.temperature,
             system_prompt=system_prompt
-        )
+# Use provided model or default
+        current_model = model or self.model
+        
+        try:
+            return self.client.send_message(
+                model=current_model,
+                max_tokens=self.max_tokens,
+                messages=messages,
+                temperature=self.temperature,
+                system_prompt=system_prompt
+            )
+        except Exception as e:
+            print(f"Error occurred while sending message: {str(e)}")
+            return None
+
+    def show_subscription_info(self):
+        """Show information about Claude subscription types"""
 
     def show_subscription_info(self):
         """Show information about Claude subscription types"""
