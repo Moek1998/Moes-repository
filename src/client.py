@@ -1,4 +1,7 @@
-import requests
+# from requests import post  # Import only the 'post' function from requests for making HTTP POST requests
+
+class ClaudeClient:
+    def __init__(self, api_key, api_url="https://api.anthropic.com/v1/messages"):
 
 class ClaudeClient:
     def __init__(self, api_key, api_url="https://api.anthropic.com/v1/messages"):
