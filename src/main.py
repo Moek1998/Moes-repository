@@ -13,6 +13,9 @@ from .client import ClaudeClient
 
 class ClaudeCLI:
     def __init__(self):
+        """
+        Initialize the ClaudeCLI instance, setting up configuration paths, available models, and preparing the configuration environment.
+        """
         self.config_dir = Path.home() / '.claude'
         self.config_file = self.config_dir / 'config.ini'
         self.api_key = None
@@ -88,7 +91,11 @@ class ClaudeCLI:
         self.subscription_type = config.get('DEFAULT', 'subscription_type', fallback='api')
 
     def setup_api_key(self, api_key):
-        """Setup API key in config file"""
+        """
+        Save the provided API key to the configuration file and update the current session.
+        
+        Updates the config file with the new API key, sets the API key for the current instance and its client, and confirms the update.
+        """
         config = configparser.ConfigParser()
         config.read(self.config_file)
         config.set('DEFAULT', 'api_key', api_key)
@@ -131,7 +138,20 @@ class ClaudeCLI:
         current_model = model or self.model
         
         try:
-            return self.client.send_message(
+            """
+        Sends a user message to Claude and returns the AI-generated response.
+        
+        If no API key is configured, prints instructions for obtaining and setting up access and returns None.
+        
+        Parameters:
+            message (str): The user's message to send to Claude.
+            system_prompt (str, optional): An optional system prompt to guide Claude's behavior.
+            model (str, optional): The Claude model to use; defaults to the configured model if not specified.
+        
+        Returns:
+            str or None: The response from Claude, or None if the API key is missing or an error occurs.
+        """
+        return self.client.send_message(
                 model=current_model,
                 max_tokens=self.max_tokens,
                 messages=messages,
@@ -315,7 +335,11 @@ Always provide practical, working code examples when appropriate."""
                 break
 
     def interactive_mode(self):
-        """Start interactive chat mode"""
+        """
+        Starts the standard interactive chat mode with Claude AI.
+        
+        This method launches an interactive command-line session for chatting with Claude, using the default configuration and without any specialized system prompt.
+        """
         return self.interactive_mode_enhanced()
 
 if __name__ == '__main__':

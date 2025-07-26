@@ -2,6 +2,11 @@ import argparse
 from .main import ClaudeCLI
 
 def main():
+    """
+    Entry point for the Claude CLI, handling command-line arguments and dispatching actions.
+    
+    Parses CLI arguments to interact with Claude AI in various modes, including direct messaging, interactive chat, model selection, API key setup, configuration display, model listing, subscription info, and simulation of squad or code assistant features. Delegates core functionality to the ClaudeCLI class.
+    """
     parser = argparse.ArgumentParser(
         description='Claude CLI - Interact with Claude AI from the command line',
         epilog="""
