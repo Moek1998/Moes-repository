@@ -39,5 +39,20 @@ class ClaudeClient:
             return None
         except KeyError as e:
             print(f"Error parsing response: {e}")
-            print(f"Response: {response.text}")
+except requests.exceptions.RequestException as e:
+            if "unauthorized" in str(e).lower():
+                logging.error("❌ API key invalid or expired. Get a new one at: https://console.anthropic.com/")
+            elif "rate_limit" in str(e).lower():
+                logging.warning("⏰ Rate limit reached. Consider upgrading your API plan.")
+            else:
+                logging.error(f"Error making request: {e}")
+            return None
+        except KeyError as e:
+            logging.error(f"Error parsing response: {e}")
+            logging.debug(f"Response: {response.text}")
+            return None
+
+# Import logging at the top of the file
+# import logging
+# logging.basicConfig(level=logging.INFO)
             return None
