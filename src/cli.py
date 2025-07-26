@@ -1,7 +1,34 @@
 import argparse
 from .main import ClaudeCLI
 
+import argparse
+from .main import ClaudeCLI
+
 def main():
+    try:
+        parser = argparse.ArgumentParser(
+            description='Claude CLI - Interact with Claude AI from the command line',
+            epilog="""
+Examples:
+  claude "Hello Claude!"                    # Quick question
+  claude -i                                # Interactive mode
+  claude --squad                           # Squad simulation mode
+  claude --code                            # Code assistant mode
+  claude -m claude-3-opus-20240229 "Help"  # Use specific model
+  claude --info                            # Show subscription info
+            """,
+            formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+
+        parser.add_argument('message', nargs='*', help='Message to send to Claude')
+        parser.add_argument('-i', '--interactive', action='store_true', help='Start interactive mode')
+        parser.add_argument('-s', '--system', help='System prompt for the conversation')
+        parser.add_argument('-m', '--model', help='Claude model to use')
+        parser.add_argument('--setup-key', help='Setup API key')
+        parser.add_argument('--config', action='store_true', help='Show config file location')
+    except Exception as e:
+        print(f"An error occurred while setting up the argument parser: {str(e)}")
+        return
     parser = argparse.ArgumentParser(
         description='Claude CLI - Interact with Claude AI from the command line',
         epilog="""
