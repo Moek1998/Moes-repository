@@ -1,7 +1,4 @@
-# from requests import post  # Import only the 'post' function from requests for making HTTP POST requests
-
-class ClaudeClient:
-    def __init__(self, api_key, api_url="https://api.anthropic.com/v1/messages"):
+import requests
 
 class ClaudeClient:
     def __init__(self, api_key, api_url="https://api.anthropic.com/v1/messages"):
@@ -30,46 +27,27 @@ class ClaudeClient:
             response.raise_for_status()
 
             result = response.json()
-            return result['content'][0]['text']
+            # Add defensive checks for response structure
+            if 'content' in result and len(result['content']) > 0 and 'text' in result['content'][0]:
+                return result['content'][0]['text']
+            else:
+                print(f"Unexpected response structure: {result}")
+                return None
 
         except requests.exceptions.RequestException as e:
-            if "unauthorized" in str(e).lower():
-                print("❌ API key invalid or expired. Get a new one at: https://console.anthropic.com/")
-            elif "rate_limit" in str(e).lower():
-                print("⏰ Rate limit reached. Consider upgrading your API plan.")
+            if hasattr(e, 'response') and e.response is not None:
+                if e.response.status_code == 401:
+                    print("❌ API key invalid or expired. Get a new one at: https://console.anthropic.com/")
+                elif e.response.status_code == 429:
+                    print("⏰ Rate limit reached. Consider upgrading your API plan.")
+                else:
+                    print(f"Error making request: {e}")
             else:
-return result['content'][0]['text']
+                print(f"Error making request: {e}")
+            return None
 
-        except requests.exceptions.RequestException as e:
-            # import logging
-            if "unauthorized" in str(e).lower():
-                logging.error("❌ API key invalid or expired. Get a new one at: https://console.anthropic.com/")
-            elif "rate_limit" in str(e).lower():
-                logging.warning("⏰ Rate limit reached. Consider upgrading your API plan.")
-            else:
-                logging.error(f"Error making request: {e}")
-            return None
-        except KeyError as e:
-            logging.error(f"Error parsing response: {e}")
-            logging.error(f"Response: {response.text}")
-            return None
-            return None
         except KeyError as e:
             print(f"Error parsing response: {e}")
-except requests.exceptions.RequestException as e:
-            if "unauthorized" in str(e).lower():
-                logging.error("❌ API key invalid or expired. Get a new one at: https://console.anthropic.com/")
-            elif "rate_limit" in str(e).lower():
-                logging.warning("⏰ Rate limit reached. Consider upgrading your API plan.")
-            else:
-                logging.error(f"Error making request: {e}")
-            return None
-        except KeyError as e:
-            logging.error(f"Error parsing response: {e}")
-            logging.debug(f"Response: {response.text}")
-            return None
-
-# Import logging at the top of the file
-# import logging
-# logging.basicConfig(level=logging.INFO)
+            if 'response' in locals():
+                print(f"Response: {response.text}")
             return None

@@ -7,6 +7,7 @@ Supports both API access and Claude Pro features where possible
 import sys
 import os
 import json
+import requests
 from pathlib import Path
 import configparser
 from .client import ClaudeClient
@@ -17,6 +18,7 @@ class ClaudeCLI:
         self.config_file = self.config_dir / 'config.ini'
         self.api_key = None
         
+        # Initialize session for connection reuse
         self.session = requests.Session()
         
         # Available Claude models
@@ -29,6 +31,10 @@ class ClaudeCLI:
         }
         
         self.setup_config()
+        
+        # Initialize the client after config is loaded
+        if self.api_key:
+            self.client = ClaudeClient(self.api_key)
 
     def setup_config(self):
         """Setup configuration directory and file"""
@@ -78,10 +84,12 @@ class ClaudeCLI:
         config = configparser.ConfigParser()
         config.read(self.config_file)
         
-        # Try to get API key from config file or environment variable
-        self.api_key = (
-            os.getenv('ANTHROPIC_API_KEY')
-        )
+        # Try to get API key from environment variable (secure method)
+        self.api_key = os.getenv('ANTHROPIC_API_KEY')
+        
+        # If not found in env, check config file (legacy support)
+        if not self.api_key:
+            self.api_key = config.get('DEFAULT', 'api_key', fallback='')
         
         self.model = config.get('DEFAULT', 'model', fallback='claude-3-5-sonnet-20241022')
         self.max_tokens = config.getint('DEFAULT', 'max_tokens', fallback=1000)
@@ -89,25 +97,22 @@ class ClaudeCLI:
         self.subscription_type = config.get('DEFAULT', 'subscription_type', fallback='api')
 
     def setup_api_key(self, api_key):
-        """Setup API key in config file"""
-<<<<<<<< HEAD:src/main.py
-        config = configparser.ConfigParser()
-        config.read(self.config_file)
-        config.set('DEFAULT', 'api_key', api_key)
+        """Setup API key - recommends environment variable for security"""
+        # Following security best practices from main branch
+        print("🔒 Security Notice:")
+        print("Storing API keys in config files is not recommended.")
+        print("\nRecommended approach:")
+        print("1. Set environment variable:")
+        print(f"   export ANTHROPIC_API_KEY='{api_key}'")
+        print("\n2. Or add to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
+        print(f"   echo 'export ANTHROPIC_API_KEY=\"{api_key}\"' >> ~/.bashrc")
+        print("\n3. Then reload your shell or run:")
+        print("   source ~/.bashrc")
+        print("\nFor this session, the API key has been set temporarily.")
         
-        with open(self.config_file, 'w') as f:
-            config.write(f)
-        
+        # Set for current session only
         self.api_key = api_key
-        self.client.api_key = api_key
-        print("API key saved successfully!")
-========
-        # Storing API keys in config files is insecure.
-        # This function is deprecated.
-        print("Storing API keys in config files is insecure.")
-        print("Please use environment variables instead.")
-        print("Run: export ANTHROPIC_API_KEY='your_api_key'")
->>>>>>>> origin/main:src/claude.py
+        self.client = ClaudeClient(api_key)
 
     def chat(self, message, system_prompt=None, model=None):
         """Send a message to Claude and get response"""
@@ -125,22 +130,15 @@ class ClaudeCLI:
             print("   • Note: Separate from API access")
             return None
 
+        if not hasattr(self, 'client'):
+            self.client = ClaudeClient(self.api_key)
+
         messages = [{"role": "user", "content": message}]
         
         # Use provided model or default
         current_model = model or self.model
         
-        return self.client.send_message(
-            model=current_model,
-            max_tokens=self.max_tokens,
-            messages=messages,
-            temperature=self.temperature,
-            system_prompt=system_prompt
-# Use provided model or default
-        current_model = model or self.model
-        
         try:
-<<<<<<<< HEAD:src/main.py
             return self.client.send_message(
                 model=current_model,
                 max_tokens=self.max_tokens,
@@ -150,29 +148,7 @@ class ClaudeCLI:
             )
         except Exception as e:
             print(f"Error occurred while sending message: {str(e)}")
-========
-            response = self.session.post(self.api_url, headers=headers, json=data, timeout=(10, 30))
-            response.raise_for_status()
-            
-            result = response.json()
-            return result['content'][0]['text']
-            
-        except requests.exceptions.RequestException as e:
-            if "unauthorized" in str(e).lower():
-                print("❌ API key invalid or expired. Get a new one at: https://console.anthropic.com/")
-            elif "rate_limit" in str(e).lower():
-                print("⏰ Rate limit reached. Consider upgrading your API plan.")
-            else:
-                print(f"Error making request: {e}")
             return None
-        except KeyError as e:
-            print(f"Error parsing response: {e}")
-            print(f"Response: {response.text}")
->>>>>>>> origin/main:src/claude.py
-            return None
-
-    def show_subscription_info(self):
-        """Show information about Claude subscription types"""
 
     def show_subscription_info(self):
         """Show information about Claude subscription types"""
@@ -348,9 +324,5 @@ Always provide practical, working code examples when appropriate."""
         return self.interactive_mode_enhanced()
 
 if __name__ == '__main__':
-<<<<<<<< HEAD:src/main.py
     from .cli import main
     main()
-========
-    main()
->>>>>>>> origin/main:src/claude.py

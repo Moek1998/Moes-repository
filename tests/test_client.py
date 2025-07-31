@@ -30,7 +30,8 @@ class TestClaudeClient(unittest.TestCase):
     @patch('requests.post')
     def test_send_message_unauthorized(self, mock_post):
         mock_response = Mock()
-        mock_response.raise_for_status.side_effect = requests.exceptions.RequestException("unauthorized")
+        mock_response.status_code = 401
+        mock_response.raise_for_status.side_effect = requests.exceptions.RequestException(response=mock_response)
         mock_post.return_value = mock_response
 
         response = self.client.send_message(
@@ -40,43 +41,13 @@ class TestClaudeClient(unittest.TestCase):
             temperature=0.7
         )
 
-mock_response = Mock()
-        mock_response.raise_for_status.side_effect = requests.exceptions.RequestException("unauthorized")
-        mock_post.return_value = mock_response
-
-        with self.assertRaises(requests.exceptions.RequestException) as context:
-            self.client.send_message(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=10,
-                messages=[{"role": "user", "content": "Hello"}],
-                temperature=0.7
-            )
-        
-        self.assertEqual(str(context.exception), "unauthorized")
+        self.assertIsNone(response)
 
     @patch('requests.post')
     def test_send_message_rate_limit(self, mock_post):
         mock_response = Mock()
-        mock_response.raise_for_status.side_effect = requests.exceptions.RequestException("rate_limit")
-        mock_post.return_value = mock_response
-
-        with self.assertRaises(requests.exceptions.RequestException) as context:
-            self.client.send_message(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=10,
-                messages=[{"role": "user", "content": "Hello"}],
-                temperature=0.7
-            )
-        
-        self.assertEqual(str(context.exception), "rate_limit")
-
-if __name__ == '__main__':
-    unittest.main()
-
-    @patch('requests.post')
-    def test_send_message_rate_limit(self, mock_post):
-        mock_response = Mock()
-        mock_response.raise_for_status.side_effect = requests.exceptions.RequestException("rate_limit")
+        mock_response.status_code = 429
+        mock_response.raise_for_status.side_effect = requests.exceptions.RequestException(response=mock_response)
         mock_post.return_value = mock_response
 
         response = self.client.send_message(
