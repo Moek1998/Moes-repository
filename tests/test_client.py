@@ -8,7 +8,7 @@ class TestClaudeClient(unittest.TestCase):
     def setUp(self):
         self.client = ClaudeClient(api_key="test_api_key")
 
-    @patch('requests.post')
+    @patch('requests.Session.post')
     def test_send_message_success(self, mock_post):
         mock_response = Mock()
         mock_response.raise_for_status.return_value = None
@@ -27,7 +27,7 @@ class TestClaudeClient(unittest.TestCase):
         self.assertEqual(response, "Hello, world!")
         mock_post.assert_called_once()
 
-    @patch('requests.post')
+    @patch('requests.Session.post')
     def test_send_message_unauthorized(self, mock_post):
         mock_response = Mock()
         mock_response.status_code = 401
@@ -43,7 +43,7 @@ class TestClaudeClient(unittest.TestCase):
 
         self.assertIsNone(response)
 
-    @patch('requests.post')
+    @patch('requests.Session.post')
     def test_send_message_rate_limit(self, mock_post):
         mock_response = Mock()
         mock_response.status_code = 429

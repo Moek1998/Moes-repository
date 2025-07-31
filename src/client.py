@@ -4,14 +4,16 @@ class ClaudeClient:
     def __init__(self, api_key, api_url="https://api.anthropic.com/v1/messages"):
         self.api_key = api_key
         self.api_url = api_url
-
-    def send_message(self, model, max_tokens, messages, temperature, system_prompt=None):
-        headers = {
+        # Create a session for connection reuse
+        self.session = requests.Session()
+        # Configure session with appropriate timeout and headers
+        self.session.headers.update({
             'Content-Type': 'application/json',
             'x-api-key': self.api_key,
             'anthropic-version': '2023-06-01'
-        }
+        })
 
+    def send_message(self, model, max_tokens, messages, temperature, system_prompt=None):
         data = {
             'model': model,
             'max_tokens': max_tokens,
@@ -23,7 +25,12 @@ class ClaudeClient:
             data['system'] = system_prompt
 
         try:
-            response = requests.post(self.api_url, headers=headers, json=data)
+            # Use session for connection reuse with timeout
+            response = self.session.post(
+                self.api_url, 
+                json=data,
+                timeout=(10, 30)  # 10s connect timeout, 30s read timeout
+            )
             response.raise_for_status()
 
             result = response.json()
@@ -51,3 +58,7 @@ class ClaudeClient:
             if 'response' in locals():
                 print(f"Response: {response.text}")
             return None
+
+    def close(self):
+        """Close the session when done"""
+        self.session.close()
