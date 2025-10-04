@@ -30,5 +30,6 @@ Refer to [Examples](https://www.mysmartbots.com/dev/docs/Bot_Playground/Examples
 ## Read more
 
 *   [Playground FAQ](https://www.mysmartbots.com/dev/docs/Bot_Playground/Faq "Bot Playground/Faq")
+*   [Webhooks](./Webhooks.md)
 *   [Bug Hunter program](https://www.mysmartbots.com/dev/docs/Bot_Playground/Bug_Hunter_program "Bot Playground/Bug Hunter program")
 *   [Create and sell Playground scripts](https://www.mysmartbots.com/dev/docs/Bot_Playground/Store "Bot Playground/Store")

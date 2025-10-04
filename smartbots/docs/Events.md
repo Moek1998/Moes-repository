@@ -44,3 +44,5 @@ Bot.on("instant\_message", function(data) {
 | [before\_logout](https://www.mysmartbots.com/dev/docs/Bot_Playground/Events/before_logout "Bot Playground/Events/before logout") | Fires when bot is going offline. |
 | [after\_logout](https://www.mysmartbots.com/dev/docs/Bot_Playground/Events/after_logout "Bot Playground/Events/after logout") | Fires after bot goes offline. **Not available for QubicBot yet [(?)](https://www.mysmartbots.com/dev/docs/New_features_and_QubicBot "New features and QubicBot")** |
 | [login\_error](https://www.mysmartbots.com/dev/docs/Bot_Playground/Events/login_error "Bot Playground/Events/login error") | Fires when bot is unable to login to Second Life. **Not available for QubicBot yet [(?)](https://www.mysmartbots.com/dev/docs/New_features_and_QubicBot "New features and QubicBot")** |
+| ### Webhooks | | |
+| [playground_webhook](./Webhooks.md) | Fires when the script’s webhook receives an HTTP request from your server. See [Webhooks](./Webhooks.md) for more information. |
