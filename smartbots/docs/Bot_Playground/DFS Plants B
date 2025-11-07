@@ -1,5 +1,5 @@
 // ============================================================================
-// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.2
+// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.3
 // ============================================================================
 // Based on v5.5 with all diagnostic fixes
 // ✅ Fix #1: Handle "already at location" teleport error gracefully
@@ -16,6 +16,7 @@
 // ✅ Fix #12: Complete Mr Clicky implementation
 // ✅ Fix #13: Bot.replyDialog support for Mr Clicky dialogs
 // ✅ Fix #14: Standardized dialog replies with Promise handling
+// ✅ Fix #15: Enhanced touch with activation sit sequence (fixes non-responsive plant UUIDs)
 //
 // SET B: 90 plants across 9 locations
 // ============================================================================
@@ -27,7 +28,7 @@ var WEBHOOK_CONFIG = {
     url: "https://ec7e199d46fd.ngrok-free.app/webhook",
     enabled: true,
     botName: typeof Bot !== 'undefined' ? Bot.name : "DFS_Bot_B",
-    scriptName: "DFS_Planting_B_v1.2_EVENT_DRIVEN",
+    scriptName: "DFS_Planting_B_v1.3_EVENT_DRIVEN",
     logToFile: true
 };
 
@@ -71,9 +72,10 @@ console.error = function() {
 };
 
 console.log("========================================");
-console.log("[INIT] DFS Planting SET B v1.2 - EVENT-DRIVEN VERSION");
+console.log("[INIT] DFS Planting SET B v1.3 - EVENT-DRIVEN VERSION");
 console.log("[INIT] All fixes from Set A v5.5 applied");
 console.log("[INIT] Pure event-driven architecture - NO async/await sequences");
+console.log("[INIT] Enhanced touch handling with activation sit sequence");
 console.log("========================================");
 
 // ================================================
@@ -758,7 +760,7 @@ function touchPlant() {
     }
 
     // FIX #9: Check retry limit
-    if (farmSession.retryCount >= MAX_RETRIES_ON_NO_DIALOG) {
+    if (farmSession.retryCount > MAX_RETRIES_ON_NO_DIALOG) {
         console.error("[TOUCH] Max retries reached - skipping plant");
         completePlant(false);
         return;
@@ -767,23 +769,71 @@ function touchPlant() {
     farmSession.touchCount++;
     console.log("[TOUCH] Touching plant (attempt " + farmSession.touchCount + "/" + MAX_TOUCHES + ")");
     console.log("[TOUCH] UUID: " + farmSession.currentPlantUuid.substring(0, 12) + "...");
+    console.log("[TOUCH] Full UUID: " + farmSession.currentPlantUuid);
 
     setState(PlantState.TOUCHING_PLANT);
 
-    try {
-        Bot.touchPrim(farmSession.currentPlantUuid);
+    function issueTouch(reason) {
+        if (reason) {
+            console.log("[TOUCH] touchPrim reason: " + reason);
+        }
 
-        // Set timeout for dialog response
-        setState(PlantState.WAITING_FOR_DIALOG);
-        
-        farmSession.dialogTimeout = setTimeout(function() {
-            console.error("[TOUCH] No dialog received after " + (DELAYS.DIALOG_TIMEOUT/1000) + "s");
+        try {
+            var touchResult = Bot.touchPrim(farmSession.currentPlantUuid);
+            setState(PlantState.WAITING_FOR_DIALOG);
+
+            farmSession.dialogTimeout = setTimeout(function() {
+                console.error("[TOUCH] No dialog received after " + (DELAYS.DIALOG_TIMEOUT/1000) + "s");
+                console.error("[TOUCH] Plant UUID may be incorrect or plant may not exist");
+                retryPlantTouch();
+            }, DELAYS.DIALOG_TIMEOUT);
+
+            if (touchResult && typeof touchResult.then === "function") {
+                touchResult.then(function(result) {
+                    if (result && result.success === false) {
+                        console.error("[TOUCH] touchPrim reported failure: " + (result.error || "Unknown error"));
+                        retryPlantTouch();
+                    }
+                }).catch(function(error) {
+                    var message = (error && error.message) ? error.message : error;
+                    console.error("[TOUCH] touchPrim promise rejected: " + message);
+                    retryPlantTouch();
+                });
+            }
+
+        } catch (error) {
+            console.error("[TOUCH] Touch failed: " + error.message);
+            console.error("[TOUCH] This UUID may not exist in-world");
             retryPlantTouch();
-        }, DELAYS.DIALOG_TIMEOUT);
+        }
+    }
 
-    } catch (error) {
-        console.error("[TOUCH] Touch failed: " + error.message);
-        retryPlantTouch();
+    // FIX #15: Try sitting on plant first to activate it (some DFS plants require this)
+    if (farmSession.touchCount === 1) {
+        console.log("[TOUCH] Attempting activation sit before touch");
+        try {
+            Bot.sit(farmSession.currentPlantUuid);
+
+            setTimeout(function() {
+                console.log("[TOUCH] Standing up after activation sit");
+                try {
+                    Bot.sit("NONE");
+                } catch (e) {
+                    console.log("[TOUCH] Stand failed (ignored): " + e.message);
+                }
+
+                setTimeout(function() {
+                    issueTouch("post-sit");
+                }, 1000);
+            }, 2000);
+
+        } catch (sitError) {
+            console.log("[TOUCH] Activation sit failed: " + (sitError.message || sitError));
+            issueTouch("direct fallback");
+        }
+
+    } else {
+        issueTouch("retry " + farmSession.touchCount);
     }
 }
 
@@ -1104,12 +1154,12 @@ Bot.on("instant_message", function(event) {
             }
         } else if (cmd === "test") {
             try {
-                Bot.im(sender, "Bot SET B v1.2 EVENT-DRIVEN is working! Commands: farm, stop, status, test, help");
+                Bot.im(sender, "Bot SET B v1.3 EVENT-DRIVEN is working! Commands: farm, stop, status, test, help");
             } catch (error) {
                 console.error("[IM] Test response failed: " + error.message);
             }
         } else if (cmd === "help") {
-            var helpMsg = "DFS Plant Bot SET B v1.2 Commands:\n" +
+            var helpMsg = "DFS Plant Bot SET B v1.3 Commands:\n" +
                          "- farm or farmallplants: Start farming\n" +
                          "- stop: Stop current session\n" +
                          "- status: Check progress\n" +
@@ -1138,7 +1188,7 @@ console.log("[INIT] ✓ Dialog handler registered");
 // ================================================
 
 console.log("========================================");
-console.log("[INIT] DFS Planting SET B v1.2 EVENT-DRIVEN READY");
+console.log("[INIT] DFS Planting SET B v1.3 EVENT-DRIVEN READY");
 console.log("[INIT] ✅ All diagnostic fixes applied");
 console.log("[INIT] ✅ 90 plants configured (SET B)");
 console.log("[INIT] ✅ 45s object load delay");
