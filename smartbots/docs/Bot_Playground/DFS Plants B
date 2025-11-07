@@ -1,5 +1,5 @@
 // ============================================================================
-// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.1
+// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.2
 // ============================================================================
 // Based on v5.5 with all diagnostic fixes
 // ✅ Fix #1: Handle "already at location" teleport error gracefully
@@ -15,6 +15,7 @@
 // ✅ Fix #11: Ignore dialogs during Mr Clicky sequence (updated for Mr Clicky replies)
 // ✅ Fix #12: Complete Mr Clicky implementation
 // ✅ Fix #13: Bot.replyDialog support for Mr Clicky dialogs
+// ✅ Fix #14: Standardized dialog replies with Promise handling
 //
 // SET B: 90 plants across 9 locations
 // ============================================================================
@@ -26,7 +27,7 @@ var WEBHOOK_CONFIG = {
     url: "https://ec7e199d46fd.ngrok-free.app/webhook",
     enabled: true,
     botName: typeof Bot !== 'undefined' ? Bot.name : "DFS_Bot_B",
-    scriptName: "DFS_Planting_B_v1.1_EVENT_DRIVEN",
+    scriptName: "DFS_Planting_B_v1.2_EVENT_DRIVEN",
     logToFile: true
 };
 
@@ -70,7 +71,7 @@ console.error = function() {
 };
 
 console.log("========================================");
-console.log("[INIT] DFS Planting SET B v1.1 - EVENT-DRIVEN VERSION");
+console.log("[INIT] DFS Planting SET B v1.2 - EVENT-DRIVEN VERSION");
 console.log("[INIT] All fixes from Set A v5.5 applied");
 console.log("[INIT] Pure event-driven architecture - NO async/await sequences");
 console.log("========================================");
@@ -343,6 +344,55 @@ function setState(newState) {
     farmSession.currentState = newState;
 }
 
+function replyToDialog(channel, objectUuid, button, onSuccess, onFailure) {
+    if (channel === null || channel === undefined) {
+        console.error("[DIALOG] Cannot reply - invalid channel");
+        if (typeof onFailure === "function") onFailure("Invalid channel");
+        return;
+    }
+
+    if (!objectUuid) {
+        console.error("[DIALOG] Cannot reply - invalid object UUID");
+        if (typeof onFailure === "function") onFailure("Invalid object UUID");
+        return;
+    }
+
+    if (!button) {
+        console.error("[DIALOG] Cannot reply - invalid button text");
+        if (typeof onFailure === "function") onFailure("Invalid button");
+        return;
+    }
+
+    var shortUuid = objectUuid.toString().substring(0, 12);
+    console.log("[DIALOG] Sending reply '" + button + "' to " + shortUuid + "...");
+
+    try {
+        var command = Bot.replyDialog(channel, objectUuid, button);
+
+        if (command && typeof command.then === "function") {
+            command.then(function(result) {
+                if (result && result.success === false) {
+                    var errorMessage = result.error || "Unknown replyDialog error";
+                    console.error("[DIALOG] replyDialog reported failure: " + errorMessage);
+                    if (typeof onFailure === "function") onFailure(errorMessage);
+                    return;
+                }
+
+                if (typeof onSuccess === "function") onSuccess(result);
+            }).catch(function(error) {
+                var message = (error && error.message) ? error.message : error;
+                console.error("[DIALOG] replyDialog promise rejected: " + message);
+                if (typeof onFailure === "function") onFailure(error);
+            });
+        } else {
+            if (typeof onSuccess === "function") onSuccess(command);
+        }
+    } catch (error) {
+        console.error("[DIALOG] replyDialog threw: " + error.message);
+        if (typeof onFailure === "function") onFailure(error);
+    }
+}
+
 // FIX #6: Timeout recovery check
 function checkPlantTimeout() {
     if (!farmSession.active || !farmSession.plantStartTime) return;
@@ -381,13 +431,14 @@ Bot.on("script_dialog", function(event) {
             console.log("[DIALOG] Mr Clicky step: " + farmSession.mrClickyStep + "/3");
             
             if (event.buttons && event.buttons.length > 0) {
-                console.log("[DIALOG] Replying to Mr Clicky with first button: " + event.buttons[0]);
-                try {
-                    Bot.replyDialog(event.channel, event.object_uuid, event.buttons[0]);
+                var mrClickyButton = event.buttons[0];
+                console.log("[DIALOG] Replying to Mr Clicky with first button: " + mrClickyButton);
+                replyToDialog(event.channel, event.object_uuid, mrClickyButton, function() {
                     console.log("[DIALOG] ✓ Mr Clicky dialog replied successfully");
-                } catch (error) {
-                    console.error("[DIALOG] Failed to reply to Mr Clicky dialog: " + error.message);
-                }
+                }, function(error) {
+                    var message = (error && error.message) ? error.message : error;
+                    console.error("[DIALOG] Failed to reply to Mr Clicky dialog: " + message);
+                });
             } else {
                 console.log("[DIALOG] Mr Clicky dialog has no buttons to reply with");
             }
@@ -408,8 +459,8 @@ Bot.on("script_dialog", function(event) {
         farmSession.currentDialog = {
             buttons: event.buttons || [],
             channel: event.channel,
-            objectUuid: event.object_uuid,
-            objectName: event.object_name,
+            object_uuid: event.object_uuid,
+            object_name: event.object_name,
             text: event.text,
             timestamp: Date.now()
         };
@@ -472,37 +523,35 @@ function processDialog() {
             return;
         }
 
+        var dialogChannel = farmSession.currentDialog.channel;
+        var dialogObjectUuid = farmSession.currentDialog.object_uuid;
+
         if (nextOp.operation === "exit") {
             console.log("[DIALOG] Plant complete, pressing Exit");
-            try {
-                Bot.replyDialog(farmSession.currentDialog.channel, farmSession.currentDialog.objectUuid, "Exit");
+            replyToDialog(dialogChannel, dialogObjectUuid, "Exit", function() {
                 setTimeout(function() {
                     completePlant(true);
                 }, DELAYS.REPLY);
-            } catch (error) {
-                console.error("[DIALOG] Exit button failed: " + error.message);
+            }, function(error) {
+                var message = (error && error.message) ? error.message : error;
+                console.error("[DIALOG] Exit button failed: " + message);
                 completePlant(false);
-            }
+            });
             return;
         }
 
         // Press the operation button
         console.log("[DIALOG] Pressing button: " + nextOp.button);
 
-        try {
-            Bot.replyDialog(farmSession.currentDialog.channel, farmSession.currentDialog.objectUuid, nextOp.button);
-
-            // Mark operation as in progress
+        replyToDialog(dialogChannel, dialogObjectUuid, nextOp.button, function() {
             if (!farmSession.plantOperations[farmSession.currentPlantUuid]) {
                 farmSession.plantOperations[farmSession.currentPlantUuid] = {};
             }
 
-            // Handle special operations
             if (nextOp.special === "WATER_SOURCE") {
                 console.log("[DIALOG] Water operation started, waiting for source selection");
                 farmSession.waitingForWaterCompletion = true;
                 setState(PlantState.WATER_SOURCE_SELECTION);
-                // Water source dialog will be handled by the dialog event
             } else if (nextOp.special === "MR_CLICKY") {
                 console.log("[DIALOG] Mr Clicky operation required");
                 farmSession.mrClickyOperation = nextOp.operation;
@@ -511,7 +560,6 @@ function processDialog() {
                     startMrClickySequence();
                 }, DELAYS.REPLY);
             } else {
-                // Normal operation - mark complete and touch again
                 farmSession.plantOperations[farmSession.currentPlantUuid][nextOp.operation] = true;
                 console.log("[DIALOG] Operation " + nextOp.operation + " complete");
 
@@ -519,11 +567,11 @@ function processDialog() {
                     touchPlant();
                 }, DELAYS.REPLY);
             }
-
-        } catch (error) {
-            console.error("[DIALOG] Reply failed: " + error.message);
+        }, function(error) {
+            var message = (error && error.message) ? error.message : error;
+            console.error("[DIALOG] Reply failed: " + message);
             retryPlantTouch();
-        }
+        });
 
     } catch (error) {
         console.error("[DIALOG] Process error: " + error.message);
@@ -546,24 +594,28 @@ function handleWaterSourceDialog() {
 
         var buttons = farmSession.currentDialog.buttons;
         var selection = buttons.indexOf("Tower") !== -1 ? "Tower" : "Barrel";
+        var dialogChannel = farmSession.currentDialog.channel;
+        var dialogObjectUuid = farmSession.currentDialog.object_uuid;
 
         console.log("[WATER] Selecting: " + selection);
 
-        Bot.replyDialog(farmSession.currentDialog.channel, farmSession.currentDialog.objectUuid, selection);
+        replyToDialog(dialogChannel, dialogObjectUuid, selection, function() {
+            if (!farmSession.plantOperations[farmSession.currentPlantUuid]) {
+                farmSession.plantOperations[farmSession.currentPlantUuid] = {};
+            }
+            farmSession.plantOperations[farmSession.currentPlantUuid].water = true;
 
-        // Mark water as complete
-        if (!farmSession.plantOperations[farmSession.currentPlantUuid]) {
-            farmSession.plantOperations[farmSession.currentPlantUuid] = {};
-        }
-        farmSession.plantOperations[farmSession.currentPlantUuid].water = true;
+            console.log("[WATER] Water operation complete, waiting " + (DELAYS.WATER_OPERATION/1000) + "s");
 
-        console.log("[WATER] Water operation complete, waiting " + (DELAYS.WATER_OPERATION/1000) + "s");
-
-        // Wait for water to complete then touch plant again
-        setTimeout(function() {
-            console.log("[WATER] Resuming plant processing");
+            setTimeout(function() {
+                console.log("[WATER] Resuming plant processing");
+                touchPlant();
+            }, DELAYS.WATER_OPERATION);
+        }, function(error) {
+            var message = (error && error.message) ? error.message : error;
+            console.error("[WATER] Selection failed: " + message);
             touchPlant();
-        }, DELAYS.WATER_OPERATION);
+        });
 
     } catch (error) {
         console.error("[WATER] Selection failed: " + error.message);
@@ -1052,12 +1104,12 @@ Bot.on("instant_message", function(event) {
             }
         } else if (cmd === "test") {
             try {
-                Bot.im(sender, "Bot SET B v1.1 EVENT-DRIVEN is working! Commands: farm, stop, status, test, help");
+                Bot.im(sender, "Bot SET B v1.2 EVENT-DRIVEN is working! Commands: farm, stop, status, test, help");
             } catch (error) {
                 console.error("[IM] Test response failed: " + error.message);
             }
         } else if (cmd === "help") {
-            var helpMsg = "DFS Plant Bot SET B v1.1 Commands:\n" +
+            var helpMsg = "DFS Plant Bot SET B v1.2 Commands:\n" +
                          "- farm or farmallplants: Start farming\n" +
                          "- stop: Stop current session\n" +
                          "- status: Check progress\n" +
@@ -1086,7 +1138,7 @@ console.log("[INIT] ✓ Dialog handler registered");
 // ================================================
 
 console.log("========================================");
-console.log("[INIT] DFS Planting SET B v1.1 EVENT-DRIVEN READY");
+console.log("[INIT] DFS Planting SET B v1.2 EVENT-DRIVEN READY");
 console.log("[INIT] ✅ All diagnostic fixes applied");
 console.log("[INIT] ✅ 90 plants configured (SET B)");
 console.log("[INIT] ✅ 45s object load delay");
