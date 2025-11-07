@@ -1,4 +1,4 @@
-# DFS Plants B v1.3 - Touch Events Fix for Default Plant UUIDs
+# DFS Plants B v1.3 & v1.4 - Touch Reliability Fixes
 
 ## Problem Statement
 
@@ -78,6 +78,19 @@ Added:
 - Touch reason logging ("post-sit", "retry N", etc.)
 - Specific error messages for different failure types
 
+### Fix #16: Mr Clicky 3-Touch Sequence (v1.4)
+
+#### Key Improvements
+- Reduced `MR_CLICKY_STEP` delay from 5000ms to 3500ms to ensure all 3 touches occur before auto-unsit
+- Added detailed logging for each touch (step number, UUID, success)
+- Implemented promise handling for `Bot.touchPrim()` calls targeting Mr Clicky objects
+- Confirmed sequence completion with `[MR_CLICKY] ✓ All 3 touches complete` message
+
+#### Why It Matters
+- Ensures Tending/Prune operations reach Mr Clicky three times as required
+- Prevents premature sequence completion caused by plant auto-unsit
+- Provides visibility into touch success/failure for troubleshooting
+
 ## Technical Implementation
 
 ### Function Flow
@@ -147,9 +160,10 @@ touchPlant()
 ## Version Information
 
 - **Previous Version**: v1.2 (Dialog formatting fixes)
-- **Current Version**: v1.3 (Touch activation enhancements)
+- **Version v1.3**: Touch activation enhancements
+- **Current Version**: v1.4 (Mr Clicky 3-touch fix)
 - **Script File**: `smartbots/docs/Bot_Playground/DFS Plants B`
-- **Changelog**: `smartbots/docs/Bot_Playground/DFS_Plants_B_v1.3_CHANGELOG.md`
+- **Changelog**: `smartbots/docs/Bot_Playground/DFS_Plants_B_v1.4_CHANGELOG.md`
 
 ## SmartBots API Usage
 

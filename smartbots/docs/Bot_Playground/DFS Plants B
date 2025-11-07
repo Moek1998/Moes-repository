@@ -1,5 +1,5 @@
 // ============================================================================
-// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.3
+// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.4
 // ============================================================================
 // Based on v5.5 with all diagnostic fixes
 // ✅ Fix #1: Handle "already at location" teleport error gracefully
@@ -17,6 +17,7 @@
 // ✅ Fix #13: Bot.replyDialog support for Mr Clicky dialogs
 // ✅ Fix #14: Standardized dialog replies with Promise handling
 // ✅ Fix #15: Enhanced touch with activation sit sequence (fixes non-responsive plant UUIDs)
+// ✅ Fix #16: Mr Clicky touch cadence adjusted to ensure all 3 interactions
 //
 // SET B: 90 plants across 9 locations
 // ============================================================================
@@ -28,7 +29,7 @@ var WEBHOOK_CONFIG = {
     url: "https://ec7e199d46fd.ngrok-free.app/webhook",
     enabled: true,
     botName: typeof Bot !== 'undefined' ? Bot.name : "DFS_Bot_B",
-    scriptName: "DFS_Planting_B_v1.3_EVENT_DRIVEN",
+    scriptName: "DFS_Planting_B_v1.4_EVENT_DRIVEN",
     logToFile: true
 };
 
@@ -72,10 +73,11 @@ console.error = function() {
 };
 
 console.log("========================================");
-console.log("[INIT] DFS Planting SET B v1.3 - EVENT-DRIVEN VERSION");
+console.log("[INIT] DFS Planting SET B v1.4 - EVENT-DRIVEN VERSION");
 console.log("[INIT] All fixes from Set A v5.5 applied");
 console.log("[INIT] Pure event-driven architecture - NO async/await sequences");
 console.log("[INIT] Enhanced touch handling with activation sit sequence");
+console.log("[INIT] Mr Clicky 3-touch sequence optimized");
 console.log("========================================");
 
 // ================================================
@@ -99,7 +101,7 @@ var DELAYS = {
     OBJECT_LOADING: 45000,  // FIX #2: Increased from 30s to 45s
     BETWEEN_PLANTS: 5000,
     WATER_OPERATION: 5000,
-    MR_CLICKY_STEP: 5000,
+    MR_CLICKY_STEP: 3500,
     DIALOG_TIMEOUT: 30000  // For tracking, not polling
 };
 
@@ -665,12 +667,12 @@ function executeMrClickySequence() {
 
 
 function performMrClickyTouches() {
-    farmSession.mrClickyStep = 1;
+    farmSession.mrClickyStep = 0;
     
     function touchStep(step) {
         if (step > 3) {
             // All touches complete
-            console.log("[MR_CLICKY] All touches complete, plant will auto-unsit");
+            console.log("[MR_CLICKY] ✓ All 3 touches complete, plant will auto-unsit");
             setState(PlantState.MR_CLICKY_STANDING);
             // FIX #8: Plant auto-unsits after successful Mr Clicky - no manual stand needed
             setTimeout(function() {
@@ -679,8 +681,8 @@ function performMrClickyTouches() {
             return;
         }
         
-        console.log("[MR_CLICKY] Touch " + step + " of 3");
         farmSession.mrClickyStep = step;
+        console.log("[MR_CLICKY] ========== Touch " + step + " of 3 ==========");
         
         try {
             // FIX #12: Touch Mr Clicky objects, not the plant!
@@ -688,24 +690,43 @@ function performMrClickyTouches() {
             var mrClickyIndex = (step - 1) % MR_CLICKY_UUIDS.length;
             var mrClickyUuid = MR_CLICKY_UUIDS[mrClickyIndex];
             
-            console.log("[MR_CLICKY] Touching Mr Clicky UUID: " + mrClickyUuid.substring(0, 12) + "...");
-            Bot.touchPrim(mrClickyUuid);
+            console.log("[MR_CLICKY] UUID: " + mrClickyUuid.substring(0, 12) + "...");
+            console.log("[MR_CLICKY] Full UUID: " + mrClickyUuid);
             
-            // FIX #7: 5 second delay between touches
+            var touchResult = Bot.touchPrim(mrClickyUuid);
+            console.log("[MR_CLICKY] ✓ Touch command sent for step " + step);
+            
+            // Handle promise if returned
+            if (touchResult && typeof touchResult.then === "function") {
+                touchResult.then(function(result) {
+                    if (result && result.success === false) {
+                        console.error("[MR_CLICKY] Touch " + step + " reported failure: " + (result.error || "Unknown"));
+                    } else {
+                        console.log("[MR_CLICKY] Touch " + step + " promise resolved successfully");
+                    }
+                }).catch(function(error) {
+                    var message = (error && error.message) ? error.message : error;
+                    console.error("[MR_CLICKY] Touch " + step + " promise rejected: " + message);
+                });
+            }
+            
+            // FIX #16: Reduced delay to 3.5 seconds between touches for faster sequence
+            console.log("[MR_CLICKY] Waiting " + (DELAYS.MR_CLICKY_STEP/1000) + "s before next touch...");
             setTimeout(function() {
                 touchStep(step + 1);
-            }, 5000);
+            }, DELAYS.MR_CLICKY_STEP);
             
         } catch (error) {
             console.error("[MR_CLICKY] Touch " + step + " failed: " + error.message);
             // Continue to next touch anyway
             setTimeout(function() {
                 touchStep(step + 1);
-            }, 5000);
+            }, DELAYS.MR_CLICKY_STEP);
         }
     }
     
     // Start the touch sequence
+    console.log("[MR_CLICKY] Starting 3-touch sequence...");
     touchStep(1);
 }
 
@@ -1154,12 +1175,12 @@ Bot.on("instant_message", function(event) {
             }
         } else if (cmd === "test") {
             try {
-                Bot.im(sender, "Bot SET B v1.3 EVENT-DRIVEN is working! Commands: farm, stop, status, test, help");
+                Bot.im(sender, "Bot SET B v1.4 EVENT-DRIVEN is working! Commands: farm, stop, status, test, help");
             } catch (error) {
                 console.error("[IM] Test response failed: " + error.message);
             }
         } else if (cmd === "help") {
-            var helpMsg = "DFS Plant Bot SET B v1.3 Commands:\n" +
+            var helpMsg = "DFS Plant Bot SET B v1.4 Commands:\n" +
                          "- farm or farmallplants: Start farming\n" +
                          "- stop: Stop current session\n" +
                          "- status: Check progress\n" +
@@ -1188,7 +1209,7 @@ console.log("[INIT] ✓ Dialog handler registered");
 // ================================================
 
 console.log("========================================");
-console.log("[INIT] DFS Planting SET B v1.3 EVENT-DRIVEN READY");
+console.log("[INIT] DFS Planting SET B v1.4 EVENT-DRIVEN READY");
 console.log("[INIT] ✅ All diagnostic fixes applied");
 console.log("[INIT] ✅ 90 plants configured (SET B)");
 console.log("[INIT] ✅ 45s object load delay");
