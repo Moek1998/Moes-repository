@@ -42,10 +42,7 @@ function sendWebhook(message, level) {
             scriptName: WEBHOOK_CONFIG.scriptName,
             region: "Unknown"
         };
-        http.post(WEBHOOK_CONFIG.url, {
-            body: JSON.stringify(payload),
-            headers: {"Content-Type": "application/json"}
-        }, function(error, response) {});
+        http.post(WEBHOOK_CONFIG.url, payload, "json").catch(function() {});
     } catch (error) {}
 }
 
