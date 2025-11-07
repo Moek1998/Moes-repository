@@ -1,5 +1,5 @@
 // ============================================================================
-// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.0
+// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.1
 // ============================================================================
 // Based on v5.5 with all diagnostic fixes
 // ✅ Fix #1: Handle "already at location" teleport error gracefully
@@ -12,8 +12,9 @@
 // ✅ Fix #8: Plant auto-unsits after Mr Clicky (no manual stand at end)
 // ✅ Fix #9: Skip invalid UUIDs quickly (1 retry instead of 3 on no dialog)
 // ✅ Fix #10: Corrected Mr Clicky UUIDs
-// ✅ Fix #11: Ignore dialogs during Mr Clicky sequence
+// ✅ Fix #11: Ignore dialogs during Mr Clicky sequence (updated for Mr Clicky replies)
 // ✅ Fix #12: Complete Mr Clicky implementation
+// ✅ Fix #13: Bot.replyDialog support for Mr Clicky dialogs
 //
 // SET B: 90 plants across 9 locations
 // ============================================================================
@@ -25,7 +26,7 @@ var WEBHOOK_CONFIG = {
     url: "https://ec7e199d46fd.ngrok-free.app/webhook",
     enabled: true,
     botName: typeof Bot !== 'undefined' ? Bot.name : "DFS_Bot_B",
-    scriptName: "DFS_Planting_B_v1.0_EVENT_DRIVEN",
+    scriptName: "DFS_Planting_B_v1.1_EVENT_DRIVEN",
     logToFile: true
 };
 
@@ -72,7 +73,7 @@ console.error = function() {
 };
 
 console.log("========================================");
-console.log("[INIT] DFS Planting SET B v1.0 - EVENT-DRIVEN VERSION");
+console.log("[INIT] DFS Planting SET B v1.1 - EVENT-DRIVEN VERSION");
 console.log("[INIT] All fixes from Set A v5.5 applied");
 console.log("[INIT] Pure event-driven architecture - NO async/await sequences");
 console.log("========================================");
@@ -360,7 +361,7 @@ function checkPlantTimeout() {
 setInterval(checkPlantTimeout, 10000);
 
 // ================================================
-// DIALOG EVENT HANDLER - FIX #3: ROBUST HANDLING + MR CLICKY PROTECTION
+// DIALOG EVENT HANDLER - FIX #3: ROBUST HANDLING + MR CLICKY DIALOG REPLIES
 // ================================================
 
 Bot.on("script_dialog", function(event) {
@@ -371,11 +372,34 @@ Bot.on("script_dialog", function(event) {
         console.log("[DIALOG] Buttons: " + (event.buttons ? event.buttons.join(", ") : "none"));
         console.log("[DIALOG] Current State: " + farmSession.currentState);
 
-        // FIX #11: Ignore dialogs during Mr Clicky sequence
-        if (farmSession.currentState === PlantState.MR_CLICKY_SITTING ||
-            farmSession.currentState === PlantState.MR_CLICKY_TOUCHING ||
-            farmSession.currentState === PlantState.MR_CLICKY_STANDING) {
-            console.log("[DIALOG] Ignoring dialog during Mr Clicky sequence");
+        // Check if this is a Mr Clicky dialog during the sequence
+        var isMrClickyDialog = event.object_uuid && MR_CLICKY_UUIDS.indexOf(event.object_uuid) !== -1;
+        var isInMrClickySequence = (farmSession.currentState === PlantState.MR_CLICKY_SITTING ||
+                                    farmSession.currentState === PlantState.MR_CLICKY_TOUCHING ||
+                                    farmSession.currentState === PlantState.MR_CLICKY_STANDING);
+
+        // Handle Mr Clicky dialogs during the sequence
+        if (isMrClickyDialog && isInMrClickySequence) {
+            console.log("[DIALOG] Mr Clicky dialog detected during sequence");
+            console.log("[DIALOG] Mr Clicky step: " + farmSession.mrClickyStep + "/3");
+            
+            if (event.buttons && event.buttons.length > 0) {
+                console.log("[DIALOG] Replying to Mr Clicky with first button: " + event.buttons[0]);
+                try {
+                    Bot.replyDialog(event.channel, event.object_uuid, event.buttons[0]);
+                    console.log("[DIALOG] ✓ Mr Clicky dialog replied successfully");
+                } catch (error) {
+                    console.error("[DIALOG] Failed to reply to Mr Clicky dialog: " + error.message);
+                }
+            } else {
+                console.log("[DIALOG] Mr Clicky dialog has no buttons to reply with");
+            }
+            return;
+        }
+
+        // FIX #11: Ignore non-Mr Clicky dialogs during Mr Clicky sequence
+        if (isInMrClickySequence) {
+            console.log("[DIALOG] Ignoring non-Mr Clicky dialog during Mr Clicky sequence");
             console.log("[DIALOG] Mr Clicky step: " + farmSession.mrClickyStep + "/3");
             return;
         }
@@ -970,11 +994,9 @@ function startFarmSession(sender) {
     farmSession.plantQueue = PLANTS_SET_B.slice(); // Copy the array
     farmSession.currentPlantIndex = -1;
 
-    console.log("[FARM] ========================================");
     console.log("[FARM] STARTING FARM SESSION - SET B");
     console.log("[FARM] Total plants: " + farmSession.plantQueue.length);
     console.log("[FARM] Locations: " + Object.keys(PLANT_LOCATIONS).length);
-    console.log("[FARM] ========================================");
 
     try {
         Bot.im(sender, "Starting SET B plant farming for " + farmSession.plantQueue.length + " plants...");
@@ -1033,12 +1055,12 @@ Bot.on("instant_message", function(event) {
             }
         } else if (cmd === "test") {
             try {
-                Bot.im(sender, "Bot SET B v1.0 EVENT-DRIVEN is working! Commands: farm, stop, status, test, help");
+                Bot.im(sender, "Bot SET B v1.1 EVENT-DRIVEN is working! Commands: farm, stop, status, test, help");
             } catch (error) {
                 console.error("[IM] Test response failed: " + error.message);
             }
         } else if (cmd === "help") {
-            var helpMsg = "DFS Plant Bot SET B v1.0 Commands:\n" +
+            var helpMsg = "DFS Plant Bot SET B v1.1 Commands:\n" +
                          "- farm or farmallplants: Start farming\n" +
                          "- stop: Stop current session\n" +
                          "- status: Check progress\n" +
@@ -1067,11 +1089,12 @@ console.log("[INIT] ✓ Dialog handler registered");
 // ================================================
 
 console.log("========================================");
-console.log("[INIT] DFS Planting SET B v1.0 EVENT-DRIVEN READY");
+console.log("[INIT] DFS Planting SET B v1.1 EVENT-DRIVEN READY");
 console.log("[INIT] ✅ All diagnostic fixes applied");
 console.log("[INIT] ✅ 90 plants configured (SET B)");
 console.log("[INIT] ✅ 45s object load delay");
 console.log("[INIT] ✅ Enhanced Mr Clicky logging");
+console.log("[INIT] ✅ Mr Clicky dialog reply support");
 console.log("[INIT] ✅ Robust dialog handling");
 console.log("[INIT] ✅ 3-minute plant timeout");
 console.log("[INIT] ✅ Mr Clicky: 15s timer (3s stand + 12s sit)");
