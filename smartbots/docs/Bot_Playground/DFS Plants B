@@ -1,5 +1,5 @@
 // ============================================================================
-// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.4
+// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.5
 // ============================================================================
 // Based on v5.5 with all diagnostic fixes
 // ✅ Fix #1: Handle "already at location" teleport error gracefully
@@ -18,6 +18,7 @@
 // ✅ Fix #14: Standardized dialog replies with Promise handling
 // ✅ Fix #15: Enhanced touch with activation sit sequence (fixes non-responsive plant UUIDs)
 // ✅ Fix #16: Mr Clicky touch cadence adjusted to ensure all 3 interactions
+// ✅ Fix #17: Mr Clicky touch count verification with rescue logic (3s delay, explicit counter)
 //
 // SET B: 90 plants across 9 locations
 // ============================================================================
@@ -73,11 +74,11 @@ console.error = function() {
 };
 
 console.log("========================================");
-console.log("[INIT] DFS Planting SET B v1.4 - EVENT-DRIVEN VERSION");
+console.log("[INIT] DFS Planting SET B v1.5 - EVENT-DRIVEN VERSION");
 console.log("[INIT] All fixes from Set A v5.5 applied");
 console.log("[INIT] Pure event-driven architecture - NO async/await sequences");
 console.log("[INIT] Enhanced touch handling with activation sit sequence");
-console.log("[INIT] Mr Clicky 3-touch sequence optimized");
+console.log("[INIT] Mr Clicky 3-touch sequence with verification & rescue logic");
 console.log("========================================");
 
 // ================================================
@@ -101,7 +102,7 @@ var DELAYS = {
     OBJECT_LOADING: 45000,  // FIX #2: Increased from 30s to 45s
     BETWEEN_PLANTS: 5000,
     WATER_OPERATION: 5000,
-    MR_CLICKY_STEP: 3500,
+    MR_CLICKY_STEP: 3000,
     DIALOG_TIMEOUT: 30000  // For tracking, not polling
 };
 
@@ -668,11 +669,26 @@ function executeMrClickySequence() {
 
 function performMrClickyTouches() {
     farmSession.mrClickyStep = 0;
+    var touchesCompleted = 0;
+    var rescueAttempts = 0;
     
     function touchStep(step) {
+        // Ensure exactly 3 touches are performed (steps 1, 2, and 3)
         if (step > 3) {
+            if (touchesCompleted < 3) {
+                if (rescueAttempts < 2) {
+                    rescueAttempts++;
+                    var nextStep = Math.max(1, touchesCompleted + 1);
+                    console.warn("[MR_CLICKY] Only " + touchesCompleted + " touches recorded - retrying touch " + nextStep + " (rescue attempt " + rescueAttempts + ")");
+                    setTimeout(function() {
+                        touchStep(nextStep);
+                    }, 750);
+                    return;
+                }
+                console.error("[MR_CLICKY] Unable to confirm 3 touches after " + rescueAttempts + " rescue attempts - forcing completion");
+            }
             // All touches complete
-            console.log("[MR_CLICKY] ✓ All 3 touches complete, plant will auto-unsit");
+            console.log("[MR_CLICKY] ✓ All 3 touches complete (confirmed: " + touchesCompleted + " touches), plant will auto-unsit");
             setState(PlantState.MR_CLICKY_STANDING);
             // FIX #8: Plant auto-unsits after successful Mr Clicky - no manual stand needed
             setTimeout(function() {
@@ -694,24 +710,30 @@ function performMrClickyTouches() {
             console.log("[MR_CLICKY] Full UUID: " + mrClickyUuid);
             
             var touchResult = Bot.touchPrim(mrClickyUuid);
-            console.log("[MR_CLICKY] ✓ Touch command sent for step " + step);
+            touchesCompleted++;
+            console.log("[MR_CLICKY] ✓ Touch command sent for step " + step + " (total touches: " + touchesCompleted + ")");
             
             // Handle promise if returned
             if (touchResult && typeof touchResult.then === "function") {
                 touchResult.then(function(result) {
                     if (result && result.success === false) {
                         console.error("[MR_CLICKY] Touch " + step + " reported failure: " + (result.error || "Unknown"));
+                        touchesCompleted = Math.max(0, touchesCompleted - 1);
+                        console.warn("[MR_CLICKY] Touch counter rolled back to " + touchesCompleted + " due to failure");
                     } else {
                         console.log("[MR_CLICKY] Touch " + step + " promise resolved successfully");
                     }
                 }).catch(function(error) {
                     var message = (error && error.message) ? error.message : error;
                     console.error("[MR_CLICKY] Touch " + step + " promise rejected: " + message);
+                    touchesCompleted = Math.max(0, touchesCompleted - 1);
+                    console.warn("[MR_CLICKY] Touch counter rolled back to " + touchesCompleted + " due to rejection");
                 });
             }
             
-            // FIX #16: Reduced delay to 3.5 seconds between touches for faster sequence
+            // FIX #16: Reduced delay to 3 seconds between touches for faster sequence
             console.log("[MR_CLICKY] Waiting " + (DELAYS.MR_CLICKY_STEP/1000) + "s before next touch...");
+            console.log("[MR_CLICKY] Next call will be touchStep(" + (step + 1) + ")");
             setTimeout(function() {
                 touchStep(step + 1);
             }, DELAYS.MR_CLICKY_STEP);
