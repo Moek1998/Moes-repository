@@ -81,5 +81,6 @@ The updated script now fully complies with:
 ## Files Changed
 
 - `smartbots/docs/Bot_Playground/DFS Plants B` - Main script with fixes
-- `smartbots/docs/Bot_Playground/DFS_Plants_B_v1.2_CHANGELOG.md` - Detailed changelog
+- `smartbots/docs/Bot_Playground/DFS_Plants_B_v1.4_CHANGELOG.md` - Detailed changelog
 - `DIALOG_FIX_SUMMARY.md` - This summary document
+- `TOUCH_FIX_SUMMARY.md` - Touch activation fix details

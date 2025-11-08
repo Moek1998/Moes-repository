@@ -1,0 +1,27 @@
+{
+  "name": "project",
+  "version": "1.0.0",
+  "description": "A command-line interface for interacting with Claude AI from Anthropic. Run `claude` from anywhere in your terminal to chat with Claude! ✨",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://Moek1998:ghs_o0MK0qL6CRYVtSJzzsrvxQcnXzwsTG115eyd@github.com/Moek1998/Moes-repository.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Moek1998/Moes-repository/issues"
+  },
+  "homepage": "https://github.com/Moek1998/Moes-repository#readme",
+  "devDependencies": {
+    "chai": "^6.2.0",
+    "eslint": "^9.39.1",
+    "eslint-config-es5": "^0.5.0",
+    "mocha": "^11.7.5"
+  }
+}
