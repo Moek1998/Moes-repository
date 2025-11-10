@@ -1,4 +1,4 @@
-# DFS Plants B v1.5 - Mr Clicky 3-Touch Sequence Fix
+# DFS Plants B v1.6 - Mr Clicky 3-Touch Sequence Fix & UUID Pool Expansion
 
 ## Problem Statement
 
@@ -44,7 +44,7 @@ The original code provided minimal feedback about:
 
 This made it difficult to diagnose why the third touch wasn't happening.
 
-## Solution Implemented (Fix #16 + Fix #17)
+## Solution Implemented (Fix #16 + Fix #17 + Fix #18)
 
 ### 1. Reduced Touch Interval (v1.4 → v1.5)
 Changed the delay between Mr Clicky touches from **5 seconds → 3.5 seconds (v1.4) → 3 seconds (v1.5)**:
@@ -155,6 +155,11 @@ function touchStep(step) {
 
 This ensures that if for any reason only 2 touches complete, the bot will automatically retry the missing touch(es) up to 2 times before proceeding.
 
+### 6. Expanded Mr Clicky UUID Pool (v1.6)
+- Merged both legacy and updated UUID sets into a single 7-entry array
+- Allows the bot to interact with Mr Clicky objects regardless of deployment version
+- Reduces "impossible to locate object by UUID" failures caused by in-world changes
+
 ## Benefits
 
 1. **✅ All 3 Touches Confirmed**: Faster cadence + explicit counters guarantee the sequence completes before auto-unsit
@@ -162,8 +167,9 @@ This ensures that if for any reason only 2 touches complete, the bot will automa
 3. **✅ Better Diagnostics**: Detailed logging (including `touchesCompleted` and upcoming steps) confirms sequence progress
 4. **✅ Immediate Failure Detection**: Promise handling plus verification identifies touch failures instantly
 5. **✅ Accurate Progress Tracking**: Step counter + touch counter keep state aligned for subsequent operations
+6. **✅ Multi-UUID Compatibility**: Expanded pool maintains compatibility with different Mr Clicky object revisions
 
-## Expected Log Output (v1.5)
+## Expected Log Output (v1.6)
 
 ```
 ========================================
@@ -237,13 +243,15 @@ This ensures that if for any reason only 2 touches complete, the bot will automa
   - Added `touchesCompleted` explicit counter
   - Added `rescueAttempts` retry logic
   - Enhanced logging with step predictions and counter visibility
+  - Expanded `MR_CLICKY_UUIDS` array from 4 → 7 entries (v1.6)
 
 ### Version History
 - **v1.1**: Original Mr Clicky implementation
 - **v1.2**: Dialog formatting fixes
 - **v1.3**: Touch activation enhancements
 - **v1.4**: Mr Clicky 3-touch timing fix (3.5s intervals)
-- **v1.5**: Touch count verification with rescue logic (3s intervals) ✅ (current)
+- **v1.5**: Touch count verification with rescue logic (3s intervals)
+- **v1.6**: Expanded Mr Clicky UUID pool to 7 entries ✅ (current)
 
 ## SmartBots API Compliance
 
@@ -259,6 +267,7 @@ References:
 ## Related Files
 
 - Main Script: `smartbots/docs/Bot_Playground/DFS Plants B`
-- Detailed Changelog: `smartbots/docs/Bot_Playground/DFS_Plants_B_v1.5_CHANGELOG.md`
+- Detailed Changelog: `smartbots/docs/Bot_Playground/DFS_Plants_B_v1.6_CHANGELOG.md`
 - Touch Fix Summary: `TOUCH_FIX_SUMMARY.md`
 - Dialog Fix Summary: `DIALOG_FIX_SUMMARY.md`
+- UUID Investigation: `MR_CLICKY_UUID_MISMATCH_FIX.md`
