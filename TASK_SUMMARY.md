@@ -1,4 +1,4 @@
-# DFS Plants B v1.5 - Mr Clicky Touch Count Fix Summary
+# DFS Plants B v1.6 - Mr Clicky UUID Pool Expansion & Touch Count Fix Summary
 
 ## Problem
 The DFS script was still only touching Mr Clicky twice instead of the required three times, despite previous fix attempts in v1.4.

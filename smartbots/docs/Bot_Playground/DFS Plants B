@@ -1,5 +1,5 @@
 // ============================================================================
-// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.5
+// DFS PLANTING AUTOMATION SET B - EVENT-DRIVEN VERSION v1.6
 // ============================================================================
 // Based on v5.5 with all diagnostic fixes
 // ✅ Fix #1: Handle "already at location" teleport error gracefully
@@ -19,6 +19,7 @@
 // ✅ Fix #15: Enhanced touch with activation sit sequence (fixes non-responsive plant UUIDs)
 // ✅ Fix #16: Mr Clicky touch cadence adjusted to ensure all 3 interactions
 // ✅ Fix #17: Mr Clicky touch count verification with rescue logic (3s delay, explicit counter)
+// ✅ Fix #18: Expanded Mr Clicky UUID pool to 7 UUIDs (fixes "impossible to locate object" errors)
 //
 // SET B: 90 plants across 9 locations
 // ============================================================================
@@ -30,7 +31,7 @@ var WEBHOOK_CONFIG = {
     url: "https://ec7e199d46fd.ngrok-free.app/webhook",
     enabled: true,
     botName: typeof Bot !== 'undefined' ? Bot.name : "DFS_Bot_B",
-    scriptName: "DFS_Planting_B_v1.4_EVENT_DRIVEN",
+    scriptName: "DFS_Planting_B_v1.6_EVENT_DRIVEN",
     logToFile: true
 };
 
@@ -74,11 +75,11 @@ console.error = function() {
 };
 
 console.log("========================================");
-console.log("[INIT] DFS Planting SET B v1.5 - EVENT-DRIVEN VERSION");
+console.log("[INIT] DFS Planting SET B v1.6 - EVENT-DRIVEN VERSION");
 console.log("[INIT] All fixes from Set A v5.5 applied");
 console.log("[INIT] Pure event-driven architecture - NO async/await sequences");
 console.log("[INIT] Enhanced touch handling with activation sit sequence");
-console.log("[INIT] Mr Clicky 3-touch sequence with verification & rescue logic");
+console.log("[INIT] Mr Clicky 3-touch sequence with expanded UUID pool");
 console.log("========================================");
 
 // ================================================
@@ -247,7 +248,10 @@ var MR_CLICKY_UUIDS = [
     "3491d5a7-1933-ea06-8d59-ba5788ef63b2",
     "b57c3091-3e9c-2351-0042-ae8feeaa2bb6",
     "715f2238-b3a3-bf04-60a8-fdc94838beec",
-    "2690ae28-187a-5fdb-9a59-72d365f50dc1"
+    "2690ae28-187a-5fdb-9a59-72d365f50dc1",
+    "7a0a683d-0aa6-65ed-2ae5-08b7313e6893",
+    "d73d9a20-16e0-4122-3c35-7591ccadead2",
+    "172769ad-d243-004a-13aa-49256799eaac"
 ];
 
 // ================================================
@@ -294,6 +298,7 @@ var farmSession = {
     // Mr Clicky state
     mrClickyStep: 0,
     mrClickyOperation: null,
+    mrClickyUuidIndex: 0,
 
     // Special flags
     waterSourceSelected: false,
@@ -699,10 +704,12 @@ function performMrClickyTouches() {
         
         try {
             // FIX #12: Touch Mr Clicky objects, not the plant!
-            // Cycle through available Mr Clicky UUIDs
-            var mrClickyIndex = (step - 1) % MR_CLICKY_UUIDS.length;
+            // Cycle through available Mr Clicky UUIDs using rotating index
+            var mrClickyIndex = farmSession.mrClickyUuidIndex % MR_CLICKY_UUIDS.length;
             var mrClickyUuid = MR_CLICKY_UUIDS[mrClickyIndex];
+            farmSession.mrClickyUuidIndex = (farmSession.mrClickyUuidIndex + 1) % MR_CLICKY_UUIDS.length;
             
+            console.log("[MR_CLICKY] Candidate " + (mrClickyIndex + 1) + "/" + MR_CLICKY_UUIDS.length);
             console.log("[MR_CLICKY] UUID: " + mrClickyUuid.substring(0, 12) + "...");
             console.log("[MR_CLICKY] Full UUID: " + mrClickyUuid);
             
