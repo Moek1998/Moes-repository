@@ -143,10 +143,7 @@ var PLANTS_SET_1 = [
     "e55b6362-222b-004c-cd4b-a1fe42a93c25", "49fcd7b5-9199-a71c-3904-3bd3f7fa1f83",
     "bcde3ff6-a189-746f-1a1b-63db9f590ed0", "0f28c7c7-6ca4-f5fc-6e5b-03e2f09e10f8",
     "3f0ae97f-b5c7-7f82-3ac4-b8a9f95fef71", "e574a09a-a949-6dd2-3a78-c4d75e6c86cc",
-    "41cd7e75-99fa-e804-1cd9-26385dc2ed3b", "a98e2ff9-4065-cf00-d6d0-d6e6b39ea20a",
-    "26fc677a-9278-c434-793e-0a7641d5693b", "97d7bc44-9801-82b9-5fcd-7eed6c5bf762",
-    "681c94b8-4fcb-ff59-e1df-6b5a02fd3bce", "b4940212-8247-ca02-7068-01ab8d8fcf7a",
-    "1d11ea03-3d92-af5f-72ed-98f676d4805c", "2b7baa6b-57e3-5ffd-1ffd-f1623449c188"
+    "41cd7e75-99fa-e804-1cd9-26385dc2ed3b", "a98e2ff9-4065-cf00-d6d0-d6e6b39ea20a"
 ];
 
 var PLANT_LOCATIONS = {
@@ -168,10 +165,7 @@ var PLANT_LOCATIONS = {
         "178117dd-4719-0093-6b31-ebd95e86ac6c"],
     "Sugarland/211/79/3080": ["4fb76b2c-325f-4fec-509a-a7f72d0bb015", "e1bf9fb2-0dc5-58ca-30f7-470bbea11bda",
         "ee87ceea-a733-a869-cfe4-93f4defedf65", "30e88a4b-7e18-9beb-811a-7bb7bedfcc43",
-        "dc38153a-6fd0-de89-8ac0-56591a03c62f", "26fc677a-9278-c434-793e-0a7641d5693b",
-        "97d7bc44-9801-82b9-5fcd-7eed6c5bf762", "681c94b8-4fcb-ff59-e1df-6b5a02fd3bce",
-        "b4940212-8247-ca02-7068-01ab8d8fcf7a", "1d11ea03-3d92-af5f-72ed-98f676d4805c",
-        "2b7baa6b-57e3-5ffd-1ffd-f1623449c188"],
+        "dc38153a-6fd0-de89-8ac0-56591a03c62f"],
     "Sugarland/210/82/3080": ["2e9e3570-5edc-3851-2c4a-567801eafa84", "f790351e-0964-a974-5682-855368628c47",
         "fd881ad3-0e49-fee4-804d-fe5c6baab3ad", "415f2f74-dc3b-6f98-da54-d15001098ac1",
         "1ed9af1d-b03e-fde2-823b-2aa6e7aefb29", "dedc4acc-bb5c-700d-0e86-6a52858814e1",
@@ -1037,7 +1031,7 @@ console.log("[INIT] ✓ Dialog handler registered");
 console.log("========================================");
 console.log("[INIT] DFS Planting v5.6 EVENT-DRIVEN READY");
 console.log("[INIT] ✅ All diagnostic fixes applied");
-console.log("[INIT] ✅ 66 plants configured");
+console.log("[INIT] ✅ 62 plants configured");
 console.log("[INIT] ✅ 45s object load delay");
 console.log("[INIT] ✅ Enhanced Mr Clicky logging");
 console.log("[INIT] ✅ Robust dialog handling");
