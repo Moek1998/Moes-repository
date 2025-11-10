@@ -445,7 +445,8 @@ integer wildcardMatch(string pattern, string text) {
         integer vlen = llStringLength(val);
         return (vlen <= textlen) && (llGetSubString(text, 0, vlen-1) == val);
     }
-    return (text == pattern);
+    // Default behaviour: plain keyword matches anywhere within the text
+    return llSubStringIndex(text, pattern) != -1;
 }
 
 // Check if an item matches any search term and return the matching term
