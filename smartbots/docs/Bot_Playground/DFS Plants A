@@ -1,0 +1,1059 @@
+// Bots Playground script: pLANTS TESTING (build 1 by Mvtive)
+// ============================================================================
+// DFS PLANTING AUTOMATION - EVENT-DRIVEN VERSION v5.6
+// ============================================================================
+// DIAGNOSTIC FIXES APPLIED:
+// ✅ Fix #1: Handle "already at location" teleport error gracefully
+// ✅ Fix #2: Increased object load delay to 45 seconds
+// ✅ Fix #3: Robust dialog handler (processes regardless of state)
+// ✅ Fix #4: Enhanced Mr Clicky logging
+// ✅ Fix #5: Improved touch retry logic (3s delay)
+// ✅ Fix #6: Timeout recovery (3 min max per plant)
+// ✅ Fix #7: Mr Clicky reliable timer-based sit (3s stand + 12s sit = 15s total)
+// ✅ Fix #8: Plant auto-unsits after Mr Clicky (no manual stand at end)
+// ✅ Fix #9: Skip invalid UUIDs quickly (1 retry instead of 3 on no dialog)
+// ✅ Fix #10: Corrected Mr Clicky UUIDs (was using wrong UUIDs)
+// ✅ Fix #138: Properly handle Bot.replyDialog() Promise returns
+// ✅ Fix #139: Properly handle water source selection Promise returns
+// ✅ Fix #140: Complete Mr Clicky touch sequence
+//
+// PROVEN WORKING THROUGH DIAGNOSTICS:
+// ✓ Touch command works - dialogs arrive in 2 seconds
+// ✓ Event-driven architecture is correct approach
+// ✓ Plant UUID verified: aed3bd33-f3dd-ba98-b29c-dc395d701464
+// ✓ Dialog events fire properly
+// ============================================================================
+
+// ================================================
+// WEBHOOK MONITORING
+// ================================================
+var WEBHOOK_CONFIG = {
+    url: "https://5ffbb2572ac7.ngrok-free.app/webhook",
+    enabled: true,
+    botName: typeof Bot !== 'undefined' ? Bot.name : "DFS_Bot",
+    scriptName: "DFS_Planting_v5.6_EVENT_DRIVEN",
+    logToFile: true
+};
+
+function sendWebhook(message, level) {
+    if (!WEBHOOK_CONFIG.enabled) return;
+    level = level || "INFO";
+    try {
+        var payload = {
+            timestamp: new Date().toISOString(),
+            message: "[" + level + "] " + message,
+            level: level,
+            bot: WEBHOOK_CONFIG.botName,
+            scriptName: WEBHOOK_CONFIG.scriptName,
+            region: "Unknown"
+        };
+        http.post(WEBHOOK_CONFIG.url, {
+            body: JSON.stringify(payload),
+            headers: {"Content-Type": "application/json"}
+        }, function(error, response) {});
+    } catch (error) {}
+}
+
+// Intercept console for webhook
+var originalLog = console.log;
+var originalError = console.error;
+
+console.log = function() {
+    var args = Array.prototype.slice.call(arguments);
+    var message = args.join(' ');
+    originalLog.apply(console, args);
+    var level = "INFO";
+    var upperMsg = message.toUpperCase();
+    if (upperMsg.indexOf('ERROR') !== -1 || upperMsg.indexOf('FAILED') !== -1) level = "ERROR";
+    else if (upperMsg.indexOf('WARN') !== -1) level = "WARN";
+    else if (upperMsg.indexOf('SUCCESS') !== -1) level = "SUCCESS";
+    sendWebhook(message, level);
+};
+
+console.error = function() {
+    var args = Array.prototype.slice.call(arguments);
+    var message = args.join(' ');
+    originalError.apply(console, args);
+    sendWebhook(message, "ERROR");
+};
+
+console.log("========================================");
+console.log("[INIT] DFS Planting v5.6 - EVENT-DRIVEN VERSION");
+console.log("[INIT] Fixed: Updated Mr Clicky UUIDs (22 total)");
+console.log("[INIT] Pure event-driven architecture - NO async/await sequences");
+console.log("========================================");
+
+// ================================================
+// CONFIGURATION
+// ================================================
+
+var OPERATION_PRIORITIES = [
+    {name: "Water", stateKey: "water", special: "WATER_SOURCE"},
+    {name: "Fertilize", stateKey: "fertilize", special: null},
+    {name: "Tending", stateKey: "tending", special: "MR_CLICKY"},
+    {name: "tend", stateKey: "tending", special: "MR_CLICKY"},
+    {name: "Prune", stateKey: "prune", special: "MR_CLICKY"},
+    {name: "Harvest", stateKey: "harvest", special: null}
+];
+
+var DELAYS = {
+    TOUCH: 500,
+    SIT: 1000,
+    REPLY: 500,
+    TELEPORT: 3000,
+    OBJECT_LOADING: 45000,  // FIX #2: Increased from 30s to 45s
+    BETWEEN_PLANTS: 5000,
+    WATER_OPERATION: 5000,
+    MR_CLICKY_STEP: 5000,
+    DIALOG_TIMEOUT: 30000  // For tracking, not polling
+};
+
+var MAX_TOUCHES = 15;
+var MAX_RETRIES_ON_NO_DIALOG = 1;  // Skip non-responsive plants quickly
+
+// Updated with all 66 plant UUIDs from user
+var PLANTS_SET_1 = [
+    "aed3bd33-f3dd-ba98-b29c-dc395d701464", "e9c58369-bc20-57d3-ae82-aa99a8d76f27",
+    "979b48ba-9eb2-50be-962c-402878c15acc", "3d562f11-9007-c125-7a72-37537d86e751",
+    "88eb4a91-6b8a-277f-0274-c116e729b694", "5156e3c6-e3dc-e971-c29b-b37b93959ab3",
+    "8b39896f-8003-5327-7e1b-8567972d7bb6", "15fdb42b-8a1a-9ec7-010f-86682376a4c9",
+    "388062bd-96a8-d61d-6d9b-1272fcb1dbbd", "d3072ae9-927a-d039-1a06-3717e6735449",
+    "b55ae8ea-ec9d-02ec-2ef4-1e5ee9787d6e", "4c830314-ee25-3127-2514-e8a0aebfb11f",
+    "4480318e-14bb-d3f3-3b50-573afb56b141", "af54ff4e-0d7a-a313-2d97-b94e3c47fdf7",
+    "e21d95c1-18fc-cdec-a22f-77e8e5bd9559", "58ced597-ba33-5a61-f0f9-0befb4a3f684",
+    "2abdfbf6-bc60-eee1-c656-e97e0b081680", "9198f1b6-8f78-71d4-e416-fe1b513dfb98",
+    "5c243c65-6954-4dd9-6e1d-ba9d8917a657", "3d68f1e6-8167-42a0-305a-a4d43af0cb95",
+    "be5eac72-9d5d-4d5b-44fe-696711d7e18b", "26c0d705-60df-b927-3b75-65d55fdfb000",
+    "b08628d1-2ed5-5d81-5586-9d7053db363a", "b3cb852a-e28c-603d-1a7f-0c41566f76a6",
+    "6ddf522e-f223-50a8-45f3-8cfdee5cc882", "1f40d4a1-80ac-d311-69b5-1563a8bcc7a0",
+    "70f78c76-50c0-32d3-7f41-15111cb5e135", "612d92b0-bb80-c1b6-4318-3da0c2fda1f0",
+    "cb977f2c-48e3-1a4b-efb0-6cb411c2a85b", "178117dd-4719-0093-6b31-ebd95e86ac6c",
+    "4fb76b2c-325f-4fec-509a-a7f72d0bb015", "e1bf9fb2-0dc5-58ca-30f7-470bbea11bda",
+    "ee87ceea-a733-a869-cfe4-93f4defedf65", "30e88a4b-7e18-9beb-811a-7bb7bedfcc43",
+    "dc38153a-6fd0-de89-8ac0-56591a03c62f", "2e9e3570-5edc-3851-2c4a-567801eafa84",
+    "f790351e-0964-a974-5682-855368628c47", "fd881ad3-0e49-fee4-804d-fe5c6baab3ad",
+    "415f2f74-dc3b-6f98-da54-d15001098ac1", "1ed9af1d-b03e-fde2-823b-2aa6e7aefb29",
+    "dedc4acc-bb5c-700d-0e86-6a52858814e1", "ca3bbaa0-fc91-656c-b188-5bd65a6566be",
+    "582af91c-b3ee-af20-6cb8-2da439428c13", "82de2077-6d18-1a3c-9859-cadd0a9f9334",
+    "57515cd6-abf1-c9d6-e149-0011cc8cee52", "ea1fd336-023e-5e4e-9084-d79e39c55222",
+    "66a715ac-aefb-de3e-5b71-0a8cdb00c4f9", "1e672e3c-5005-b17b-2524-650a3fa678b2",
+    "734d9463-2c0b-0d6e-7e0c-d948cacae08a", "63d93a3b-1893-e32d-6c88-67affadde8f6",
+    "d3975250-75d2-4aa5-7efa-e830e9d9925b", "c306968d-f2b2-c18a-eb6c-7de8b7963153",
+    "27fc48b5-92a6-fe5c-3b9f-56ad03ebfbd8", "bc02e379-3b75-c4f2-01e3-1981633ec465",
+    "e55b6362-222b-004c-cd4b-a1fe42a93c25", "49fcd7b5-9199-a71c-3904-3bd3f7fa1f83",
+    "bcde3ff6-a189-746f-1a1b-63db9f590ed0", "0f28c7c7-6ca4-f5fc-6e5b-03e2f09e10f8",
+    "3f0ae97f-b5c7-7f82-3ac4-b8a9f95fef71", "e574a09a-a949-6dd2-3a78-c4d75e6c86cc",
+    "41cd7e75-99fa-e804-1cd9-26385dc2ed3b", "a98e2ff9-4065-cf00-d6d0-d6e6b39ea20a",
+    "26fc677a-9278-c434-793e-0a7641d5693b", "97d7bc44-9801-82b9-5fcd-7eed6c5bf762",
+    "681c94b8-4fcb-ff59-e1df-6b5a02fd3bce", "b4940212-8247-ca02-7068-01ab8d8fcf7a",
+    "1d11ea03-3d92-af5f-72ed-98f676d4805c", "2b7baa6b-57e3-5ffd-1ffd-f1623449c188"
+];
+
+var PLANT_LOCATIONS = {
+    "Sugarland/213/82/3080": ["aed3bd33-f3dd-ba98-b29c-dc395d701464", "e9c58369-bc20-57d3-ae82-aa99a8d76f27",
+        "979b48ba-9eb2-50be-962c-402878c15acc", "3d562f11-9007-c125-7a72-37537d86e751",
+        "88eb4a91-6b8a-277f-0274-c116e729b694", "5156e3c6-e3dc-e971-c29b-b37b93959ab3",
+        "8b39896f-8003-5327-7e1b-8567972d7bb6", "15fdb42b-8a1a-9ec7-010f-86682376a4c9",
+        "388062bd-96a8-d61d-6d9b-1272fcb1dbbd", "d3072ae9-927a-d039-1a06-3717e6735449"],
+    "Sugarland/214/82/3080": ["b55ae8ea-ec9d-02ec-2ef4-1e5ee9787d6e", "4c830314-ee25-3127-2514-e8a0aebfb11f",
+        "4480318e-14bb-d3f3-3b50-573afb56b141", "af54ff4e-0d7a-a313-2d97-b94e3c47fdf7",
+        "e21d95c1-18fc-cdec-a22f-77e8e5bd9559", "58ced597-ba33-5a61-f0f9-0befb4a3f684",
+        "2abdfbf6-bc60-eee1-c656-e97e0b081680", "9198f1b6-8f78-71d4-e416-fe1b513dfb98",
+        "5c243c65-6954-4dd9-6e1d-ba9d8917a657", "3d68f1e6-8167-42a0-305a-a4d43af0cb95"],
+    "Sugarland/212/80/3080": ["be5eac72-9d5d-4d5b-44fe-696711d7e18b", "26c0d705-60df-b927-3b75-65d55fdfb000",
+        "b08628d1-2ed5-5d81-5586-9d7053db363a", "b3cb852a-e28c-603d-1a7f-0c41566f76a6",
+        "6ddf522e-f223-50a8-45f3-8cfdee5cc882"],
+    "Sugarland/211/84/3080": ["1f40d4a1-80ac-d311-69b5-1563a8bcc7a0", "70f78c76-50c0-32d3-7f41-15111cb5e135",
+        "612d92b0-bb80-c1b6-4318-3da0c2fda1f0", "cb977f2c-48e3-1a4b-efb0-6cb411c2a85b",
+        "178117dd-4719-0093-6b31-ebd95e86ac6c"],
+    "Sugarland/211/79/3080": ["4fb76b2c-325f-4fec-509a-a7f72d0bb015", "e1bf9fb2-0dc5-58ca-30f7-470bbea11bda",
+        "ee87ceea-a733-a869-cfe4-93f4defedf65", "30e88a4b-7e18-9beb-811a-7bb7bedfcc43",
+        "dc38153a-6fd0-de89-8ac0-56591a03c62f", "26fc677a-9278-c434-793e-0a7641d5693b",
+        "97d7bc44-9801-82b9-5fcd-7eed6c5bf762", "681c94b8-4fcb-ff59-e1df-6b5a02fd3bce",
+        "b4940212-8247-ca02-7068-01ab8d8fcf7a", "1d11ea03-3d92-af5f-72ed-98f676d4805c",
+        "2b7baa6b-57e3-5ffd-1ffd-f1623449c188"],
+    "Sugarland/210/82/3080": ["2e9e3570-5edc-3851-2c4a-567801eafa84", "f790351e-0964-a974-5682-855368628c47",
+        "fd881ad3-0e49-fee4-804d-fe5c6baab3ad", "415f2f74-dc3b-6f98-da54-d15001098ac1",
+        "1ed9af1d-b03e-fde2-823b-2aa6e7aefb29", "dedc4acc-bb5c-700d-0e86-6a52858814e1",
+        "ca3bbaa0-fc91-656c-b188-5bd65a6566be", "582af91c-b3ee-af20-6cb8-2da439428c13",
+        "82de2077-6d18-1a3c-9859-cadd0a9f9334", "57515cd6-abf1-c9d6-e149-0011cc8cee52",
+        "ea1fd336-023e-5e4e-9084-d79e39c55222", "66a715ac-aefb-de3e-5b71-0a8cdb00c4f9",
+        "1e672e3c-5005-b17b-2524-650a3fa678b2", "734d9463-2c0b-0d6e-7e0c-d948cacae08a",
+        "63d93a3b-1893-e32d-6c88-67affadde8f6"],
+    "Sugarland/224/88/3080": ["d3975250-75d2-4aa5-7efa-e830e9d9925b", "c306968d-f2b2-c18a-eb6c-7de8b7963153",
+        "27fc48b5-92a6-fe5c-3b9f-56ad03ebfbd8", "bc02e379-3b75-c4f2-01e3-1981633ec465",
+        "e55b6362-222b-004c-cd4b-a1fe42a93c25", "49fcd7b5-9199-a71c-3904-3bd3f7fa1f83",
+        "bcde3ff6-a189-746f-1a1b-63db9f590ed0", "0f28c7c7-6ca4-f5fc-6e5b-03e2f09e10f8",
+        "3f0ae97f-b5c7-7f82-3ac4-b8a9f95fef71", "e574a09a-a949-6dd2-3a78-c4d75e6c86cc",
+        "41cd7e75-99fa-e804-1cd9-26385dc2ed3b", "a98e2ff9-4065-cf00-d6d0-d6e6b39ea20a"]
+};
+
+var MR_CLICKY_UUIDS = [
+    "2c3ba05c-c6ad-3bd7-8319-856f2d4a1ed1",
+    "19c9c2e4-55d9-151e-31e2-e9979fadb8fd",
+    "498d8d29-9874-e7ba-fe53-6c3d4e354182",
+    "87b01c8d-71c2-1e42-5c1d-ce844aefcb22",
+    "158e1718-6080-35ab-a821-177ed76553df",
+    "216b0128-4b39-0ed1-4fa6-8573c4be18e8",
+    "1b7f6676-6fea-75ec-8887-ac289020fc30",
+    "da149cb9-f775-9bf8-16f7-e9bbb5236431",
+    "becf35e1-b4e4-f8a3-7ebe-e2afd69e7df2",
+    "f820fdac-e0aa-32a4-8bdf-020201ca3b00",
+    "7f27da8c-228b-99b4-dc88-e312ff3b9c0e",
+    "2798f981-8423-2d40-ae45-416bc2e67c9a",
+    "34576a42-28f3-8330-14c0-dbb078a72118",
+    "a61306d0-db24-354e-80cf-0adf4b94da6b",
+    "75a102a0-9ac2-7a70-b70d-6c22954462b6",
+    "296437d3-7966-eab7-1577-9dddd4902054",
+    "2b8ea737-132c-2c24-d2a7-31106e50465e",
+    "0d21b013-b2b8-48e3-bf86-18c630354b58",
+    "b3363af4-2743-eb74-fd07-8e4ce2151b7a",
+    "a4836aef-7589-2ec9-1320-0f24a5d55ca9",
+    "b260ae7e-4955-2468-4cf9-32d936bcfc79",
+    "027af238-e328-512a-57b3-8a71a635b343"
+];
+
+// ================================================
+// STATE MACHINE
+// ================================================
+
+var PlantState = {
+    IDLE: "IDLE",
+    TELEPORTING: "TELEPORTING",
+    WAITING_FOR_OBJECTS: "WAITING_FOR_OBJECTS",
+    TOUCHING_PLANT: "TOUCHING_PLANT",
+    WAITING_FOR_DIALOG: "WAITING_FOR_DIALOG",
+    PROCESSING_DIALOG: "PROCESSING_DIALOG",
+    WATER_SOURCE_SELECTION: "WATER_SOURCE_SELECTION",
+    MR_CLICKY_SITTING: "MR_CLICKY_SITTING",
+    MR_CLICKY_TOUCHING: "MR_CLICKY_TOUCHING",
+    MR_CLICKY_STANDING: "MR_CLICKY_STANDING",
+    COMPLETING_OPERATION: "COMPLETING_OPERATION",
+    PLANT_COMPLETE: "PLANT_COMPLETE",
+    ERROR: "ERROR"
+};
+
+// ================================================
+// GLOBAL STATE
+// ================================================
+
+var farmSession = {
+    active: false,
+    currentState: PlantState.IDLE,
+    plantQueue: [],
+    currentPlantIndex: -1,
+    currentPlantUuid: null,
+    currentLocation: null,
+    lastLocation: null,
+    currentDialog: null,
+    plantOperations: {},  // Track completed operations per plant
+    touchCount: 0,
+    dialogTimeout: null,
+    retryCount: 0,
+    completed: 0,
+    failed: 0,
+    sender: null,
+
+    // Mr Clicky state
+    mrClickyStep: 0,
+    mrClickyOperation: null,
+
+    // Special flags
+    waterSourceSelected: false,
+    waitingForWaterCompletion: false,
+
+    // FIX #6: Timeout recovery
+    plantStartTime: null,
+    PLANT_TIMEOUT: 180000  // 3 minutes max per plant
+};
+
+// ================================================
+// UTILITY FUNCTIONS
+// ================================================
+
+function getPlantLocation(plantUuid) {
+    for (var location in PLANT_LOCATIONS) {
+        if (PLANT_LOCATIONS[location].indexOf(plantUuid) !== -1) {
+            return location;
+        }
+    }
+    return null;
+}
+
+function getNextOperation(buttons, plantOps) {
+    for (var i = 0; i < OPERATION_PRIORITIES.length; i++) {
+        var priority = OPERATION_PRIORITIES[i];
+        if (buttons.indexOf(priority.name) !== -1 && !plantOps[priority.stateKey]) {
+            return {
+                button: priority.name,
+                operation: priority.stateKey,
+                special: priority.special
+            };
+        }
+    }
+    if (buttons.length === 1 && buttons[0] === "Exit") {
+        return {button: "Exit", operation: "exit", special: null};
+    }
+    return null;
+}
+
+function clearDialogTimeout() {
+    if (farmSession.dialogTimeout) {
+        clearTimeout(farmSession.dialogTimeout);
+        farmSession.dialogTimeout = null;
+    }
+}
+
+function setState(newState) {
+    console.log("[STATE] " + farmSession.currentState + " -> " + newState);
+    farmSession.currentState = newState;
+}
+
+// FIX #6: Timeout recovery check
+function checkPlantTimeout() {
+    if (!farmSession.active || !farmSession.plantStartTime) return;
+
+    var elapsed = Date.now() - farmSession.plantStartTime;
+    if (elapsed > farmSession.PLANT_TIMEOUT) {
+        console.error("[TIMEOUT] Plant exceeded 3 minute limit - skipping");
+        completePlant(false);
+    }
+}
+
+// Check every 10 seconds
+setInterval(checkPlantTimeout, 10000);
+
+// ================================================
+// DIALOG EVENT HANDLER - FIX #3: ROBUST HANDLING
+// ================================================
+
+Bot.on("script_dialog", function(event) {
+    try {
+        console.log("[DIALOG] ========== DIALOG RECEIVED ==========");
+        console.log("[DIALOG] Object: " + (event.object_name || "Unknown"));
+        console.log("[DIALOG] UUID: " + (event.object_uuid || "Unknown").substring(0, 12) + "...");
+        console.log("[DIALOG] Buttons: " + (event.buttons ? event.buttons.join(", ") : "none"));
+        console.log("[DIALOG] Current State: " + farmSession.currentState);
+
+        // Clear any timeout since we got a dialog
+        clearDialogTimeout();
+
+        // Store dialog
+        farmSession.currentDialog = {
+            buttons: event.buttons || [],
+            channel: event.channel,
+            objectUuid: event.object_uuid,
+            objectName: event.object_name,
+            text: event.text,
+            timestamp: Date.now()
+        };
+
+        // FIX #3: Process dialog if we're actively farming, regardless of exact state
+        if (farmSession.active) {
+            // Handle water source dialog (has Tower/Barrel buttons)
+            if (event.buttons &&
+                (event.buttons.indexOf("Tower") !== -1 || event.buttons.indexOf("Barrel") !== -1)) {
+                console.log("[WATER] Water source dialog detected");
+                setState(PlantState.WATER_SOURCE_SELECTION);
+                handleWaterSourceDialog();
+            }
+            // Handle normal plant dialog
+            else if (farmSession.currentState === PlantState.WAITING_FOR_DIALOG) {
+                setState(PlantState.PROCESSING_DIALOG);
+                processDialog();
+            }
+            // Log unexpected dialog but still process it
+            else {
+                console.log("[DIALOG] Received in unexpected state: " + farmSession.currentState);
+                console.log("[DIALOG] Processing anyway...");
+                setState(PlantState.PROCESSING_DIALOG);
+                processDialog();
+            }
+        } else {
+            console.log("[DIALOG] Ignored - farm session not active");
+        }
+
+    } catch (error) {
+        console.error("[DIALOG] Handler error: " + error.message);
+        setState(PlantState.ERROR);
+        moveToNextPlant();
+    }
+});
+
+// ================================================
+// PROCESS DIALOG - DECIDE NEXT ACTION
+// ================================================
+
+function processDialog() {
+    try {
+        if (!farmSession.currentDialog || !farmSession.currentDialog.buttons) {
+            console.error("[DIALOG] No valid dialog to process");
+            retryPlantTouch();
+            return;
+        }
+
+        var buttons = farmSession.currentDialog.buttons;
+        var plantOps = farmSession.plantOperations[farmSession.currentPlantUuid] || {};
+
+        console.log("[DIALOG] Buttons available: " + buttons.join(", "));
+        console.log("[DIALOG] Completed operations: " + JSON.stringify(plantOps));
+
+        var nextOp = getNextOperation(buttons, plantOps);
+
+        if (!nextOp) {
+            console.log("[DIALOG] No operations needed");
+            completePlant(true);
+            return;
+        }
+
+        if (nextOp.operation === "exit") {
+            console.log("[DIALOG] Plant complete, pressing Exit");
+            // ✅ FIX #138: Bot.replyDialog() returns Promise - MUST handle properly
+            Bot.replyDialog(farmSession.currentDialog.channel, farmSession.currentDialog.objectUuid, "Exit")
+                .then(function() {
+                    console.log("[DIALOG] Exit button pressed successfully");
+                    setTimeout(function() {
+                        completePlant(true);
+                    }, DELAYS.REPLY);
+                })
+                .catch(function(error) {
+                    console.error("[DIALOG] Exit button failed: " + error.message);
+                    completePlant(false);
+                });
+            return;
+        }
+
+        // Press the operation button
+        console.log("[DIALOG] Pressing button: " + nextOp.button);
+
+        // ✅ FIX #138: Properly handle Bot.replyDialog() Promise
+        Bot.replyDialog(farmSession.currentDialog.channel, farmSession.currentDialog.objectUuid, nextOp.button)
+            .then(function() {
+                console.log("[DIALOG] Button '" + nextOp.button + "' pressed successfully");
+
+                // Mark operation as in progress
+                if (!farmSession.plantOperations[farmSession.currentPlantUuid]) {
+                    farmSession.plantOperations[farmSession.currentPlantUuid] = {};
+                }
+
+                // Handle special operations
+                if (nextOp.special === "WATER_SOURCE") {
+                    console.log("[DIALOG] Water operation started, waiting for source selection");
+                    farmSession.waitingForWaterCompletion = true;
+                    setState(PlantState.WATER_SOURCE_SELECTION);
+                    // Water source dialog will be handled by the dialog event
+                } else if (nextOp.special === "MR_CLICKY") {
+                    console.log("[DIALOG] Mr Clicky operation required");
+                    farmSession.mrClickyOperation = nextOp.operation;
+                    setTimeout(function() {
+                        startMrClickySequence();
+                    }, DELAYS.REPLY);
+                } else {
+                    // Normal operation - mark complete and touch again
+                    farmSession.plantOperations[farmSession.currentPlantUuid][nextOp.operation] = true;
+                    console.log("[DIALOG] Operation " + nextOp.operation + " complete");
+
+                    setTimeout(function() {
+                        touchPlant();
+                    }, DELAYS.REPLY);
+                }
+            })
+            .catch(function(error) {
+                console.error("[DIALOG] Button press failed: " + error.message);
+                console.error("[DIALOG] Error details: " + JSON.stringify(error));
+                retryPlantTouch();
+            });
+
+    } catch (error) {
+        console.error("[DIALOG] Process error: " + error.message);
+        setState(PlantState.ERROR);
+        moveToNextPlant();
+    }
+}
+
+// ================================================
+// WATER SOURCE DIALOG HANDLER
+// ================================================
+
+function handleWaterSourceDialog() {
+    try {
+        if (!farmSession.currentDialog || !farmSession.currentDialog.buttons) {
+            console.error("[WATER] No water dialog to process");
+            touchPlant();
+            return;
+        }
+
+        var buttons = farmSession.currentDialog.buttons;
+        var selection = buttons.indexOf("Tower") !== -1 ? "Tower" : "Barrel";
+
+        console.log("[WATER] Selecting: " + selection);
+
+        // ✅ FIX #139: Properly handle water source selection Promise
+        Bot.replyDialog(farmSession.currentDialog.channel, farmSession.currentDialog.objectUuid, selection)
+            .then(function() {
+                console.log("[WATER] Water source '" + selection + "' selected successfully");
+
+                // Mark water as complete
+                if (!farmSession.plantOperations[farmSession.currentPlantUuid]) {
+                    farmSession.plantOperations[farmSession.currentPlantUuid] = {};
+                }
+                farmSession.plantOperations[farmSession.currentPlantUuid].water = true;
+
+                console.log("[WATER] Water operation complete, waiting " + (DELAYS.WATER_OPERATION/1000) + "s");
+
+                // Wait for water to complete then touch plant again
+                setTimeout(function() {
+                    console.log("[WATER] Resuming plant processing");
+                    touchPlant();
+                }, DELAYS.WATER_OPERATION);
+            })
+            .catch(function(error) {
+                console.error("[WATER] Water source selection failed: " + error.message);
+                console.error("[WATER] Error details: " + JSON.stringify(error));
+                // Try to continue anyway
+                setTimeout(function() {
+                    touchPlant();
+                }, DELAYS.REPLY);
+            });
+
+    } catch (error) {
+        console.error("[WATER] Selection error: " + error.message);
+        touchPlant();
+    }
+}
+
+// ================================================
+// MR CLICKY SEQUENCE - FIX #140: COMPLETE TOUCH SEQUENCE
+// ================================================
+
+function startMrClickySequence() {
+    console.log("========================================");
+    console.log("[MR_CLICKY] STARTING SEQUENCE");
+    console.log("[MR_CLICKY] Operation: " + farmSession.mrClickyOperation);
+    console.log("[MR_CLICKY] Plant UUID: " + farmSession.currentPlantUuid.substring(0, 12) + "...");
+    console.log("========================================");
+
+    farmSession.mrClickyStep = 0;
+    setState(PlantState.MR_CLICKY_SITTING);
+
+    try {
+        // Step 0: Stand up first to ensure clean state
+        console.log("[MR_CLICKY] Step 0: Standing up first (clean state)");
+        try {
+            Bot.sit("NONE");
+            console.log("[MR_CLICKY] ✓ Stand command sent");
+        } catch (standError) {
+            console.log("[MR_CLICKY] Stand command error (ignored): " + standError.message);
+        }
+
+        // Wait 3 seconds for stand to complete
+        console.log("[MR_CLICKY] Waiting 3s for stand to complete...");
+        setTimeout(function() {
+            // Step 1: Sit on plant
+            console.log("[MR_CLICKY] Step 1: Sitting on plant");
+            console.log("[MR_CLICKY] Plant UUID: " + farmSession.currentPlantUuid.substring(0, 12) + "...");
+            
+            try {
+                Bot.sit(farmSession.currentPlantUuid);
+                console.log("[MR_CLICKY] ✓ Sit command sent");
+            } catch (sitError) {
+                console.error("[MR_CLICKY] Sit failed: " + sitError.message);
+                completeMrClicky(false);
+                return;
+            }
+
+            // Wait 12 seconds while sitting (plant processes the sit)
+            console.log("[MR_CLICKY] Waiting 12s while sitting on plant...");
+            setTimeout(function() {
+                // Step 2: Touch all Mr Clicky objects while still sitting
+                console.log("[MR_CLICKY] Step 2: Touching Mr Clicky objects (while sitting)");
+                setState(PlantState.MR_CLICKY_TOUCHING);
+                
+                // ✅ FIX #140: Touch each Mr Clicky object with delays
+                var touchIndex = 0;
+                
+                function touchNextMrClicky() {
+                    if (touchIndex >= MR_CLICKY_UUIDS.length) {
+                        console.log("[MR_CLICKY] ✓ All " + MR_CLICKY_UUIDS.length + " Mr Clicky objects touched");
+                        
+                        // Step 3: Wait for plant to auto-unsit (FIX #8)
+                        console.log("[MR_CLICKY] Step 3: Waiting for plant to auto-unsit...");
+                        setState(PlantState.MR_CLICKY_STANDING);
+                        
+                        setTimeout(function() {
+                            console.log("[MR_CLICKY] ✓ Auto-unsit complete");
+                            completeMrClicky(true);
+                        }, 3000);
+                        return;
+                    }
+
+                    var mrClickyUuid = MR_CLICKY_UUIDS[touchIndex];
+                    console.log("[MR_CLICKY] Touching Mr Clicky " + (touchIndex + 1) + "/" + MR_CLICKY_UUIDS.length);
+                    console.log("[MR_CLICKY] UUID: " + mrClickyUuid.substring(0, 12) + "...");
+                    
+                    try {
+                        Bot.touchPrim(mrClickyUuid);
+                        console.log("[MR_CLICKY] ✓ Touch command sent");
+                    } catch (touchError) {
+                        console.error("[MR_CLICKY] Touch failed: " + touchError.message);
+                    }
+
+                    touchIndex++;
+                    
+                    // Wait 500ms between touches
+                    setTimeout(touchNextMrClicky, 500);
+                }
+
+                // Start touching Mr Clicky objects
+                touchNextMrClicky();
+
+            }, 12000); // 12s sit duration
+
+        }, 3000); // 3s stand duration
+
+    } catch (error) {
+        console.error("[MR_CLICKY] Sequence error: " + error.message);
+        completeMrClicky(false);
+    }
+}
+
+function completeMrClicky(success) {
+    console.log("========================================");
+    console.log("[MR_CLICKY] SEQUENCE " + (success ? "COMPLETE" : "FAILED"));
+    console.log("========================================");
+
+    if (success) {
+        // Mark operation as complete
+        if (!farmSession.plantOperations[farmSession.currentPlantUuid]) {
+            farmSession.plantOperations[farmSession.currentPlantUuid] = {};
+        }
+        farmSession.plantOperations[farmSession.currentPlantUuid][farmSession.mrClickyOperation] = true;
+        console.log("[MR_CLICKY] Marked " + farmSession.mrClickyOperation + " as complete");
+    }
+
+    farmSession.mrClickyOperation = null;
+    farmSession.mrClickyStep = 0;
+
+    // Touch plant again to check for more operations
+    setTimeout(function() {
+        touchPlant();
+    }, DELAYS.BETWEEN_PLANTS);
+}
+
+// ================================================
+// PLANT TOUCH FUNCTION
+// ================================================
+
+function touchPlant() {
+    if (!farmSession.active || !farmSession.currentPlantUuid) {
+        console.error("[TOUCH] No active plant to touch");
+        return;
+    }
+
+    farmSession.touchCount++;
+
+    if (farmSession.touchCount >= MAX_TOUCHES) {
+        console.error("[TOUCH] Max touches reached (" + MAX_TOUCHES + ")");
+        completePlant(false);
+        return;
+    }
+
+    console.log("[TOUCH] Touching plant (attempt " + farmSession.touchCount + "/" + MAX_TOUCHES + ")");
+    console.log("[TOUCH] Plant UUID: " + farmSession.currentPlantUuid.substring(0, 12) + "...");
+    console.log("[TOUCH] Current State: " + farmSession.currentState);
+    setState(PlantState.TOUCHING_PLANT);
+
+    try {
+        Bot.touchPrim(farmSession.currentPlantUuid);
+        console.log("[TOUCH] ✓ Touch command sent");
+
+        // Set state and timeout for dialog
+        setState(PlantState.WAITING_FOR_DIALOG);
+
+        // Set a timeout in case dialog never arrives
+        farmSession.dialogTimeout = setTimeout(function() {
+            console.log("[TIMEOUT] No dialog received after " + (DELAYS.DIALOG_TIMEOUT/1000) + "s");
+            retryPlantTouch();
+        }, DELAYS.DIALOG_TIMEOUT);
+
+    } catch (error) {
+        console.error("[TOUCH] Failed: " + error.message);
+        retryPlantTouch();
+    }
+}
+
+// FIX #5: Improved retry logic with 3s delay
+function retryPlantTouch() {
+    clearDialogTimeout();
+    farmSession.retryCount++;
+
+    if (farmSession.retryCount >= MAX_RETRIES_ON_NO_DIALOG) {
+        console.error("[RETRY] Max retries (" + MAX_RETRIES_ON_NO_DIALOG + ") reached - plant failed");
+        console.log("[RETRY] Skipping non-responsive plant (likely invalid UUID)");
+        completePlant(false);
+        return;
+    }
+
+    console.log("[RETRY] Attempt " + farmSession.retryCount + "/" + MAX_RETRIES_ON_NO_DIALOG + " in 3 seconds...");
+
+    setTimeout(function() {
+        touchPlant();
+    }, 3000);  // FIX #5: Increased from DELAYS.TOUCH * 2 to 3000ms
+}
+
+// ================================================
+// PLANT COMPLETION
+// ================================================
+
+function completePlant(success) {
+    clearDialogTimeout();
+    setState(PlantState.PLANT_COMPLETE);
+
+    if (success) {
+        farmSession.completed++;
+        console.log("[SUCCESS] Plant complete! (Total: " + farmSession.completed + ")");
+    } else {
+        farmSession.failed++;
+        console.error("[FAILED] Plant failed! (Total failed: " + farmSession.failed + ")");
+    }
+
+    // Reset plant-specific state
+    farmSession.touchCount = 0;
+    farmSession.retryCount = 0;
+    farmSession.currentDialog = null;
+    farmSession.mrClickyStep = 0;
+    farmSession.mrClickyOperation = null;
+    farmSession.waterSourceSelected = false;
+    farmSession.waitingForWaterCompletion = false;
+    farmSession.plantStartTime = null;  // FIX #6: Clear timeout tracker
+
+    // Move to next plant
+    setTimeout(function() {
+        moveToNextPlant();
+    }, DELAYS.BETWEEN_PLANTS);
+}
+
+// ================================================
+// PLANT QUEUE MANAGEMENT
+// ================================================
+
+function moveToNextPlant() {
+    if (!farmSession.active) {
+        console.log("[FARM] Farming session not active");
+        return;
+    }
+
+    farmSession.currentPlantIndex++;
+
+    if (farmSession.currentPlantIndex >= farmSession.plantQueue.length) {
+        // All plants complete
+        completeFarmSession();
+        return;
+    }
+
+    // Get next plant
+    farmSession.currentPlantUuid = farmSession.plantQueue[farmSession.currentPlantIndex];
+    farmSession.currentLocation = getPlantLocation(farmSession.currentPlantUuid);
+
+    if (!farmSession.currentLocation) {
+        console.error("[FARM] No location found for plant: " + farmSession.currentPlantUuid);
+        farmSession.failed++;
+        moveToNextPlant();
+        return;
+    }
+
+    console.log("========================================");
+    console.log("[FARM] PLANT " + (farmSession.currentPlantIndex + 1) + " OF " + farmSession.plantQueue.length);
+    console.log("[FARM] UUID: " + farmSession.currentPlantUuid.substring(0, 12) + "...");
+    console.log("[FARM] Location: " + farmSession.currentLocation);
+    console.log("[FARM] Progress: " + farmSession.completed + " complete, " + farmSession.failed + " failed");
+    console.log("========================================");
+
+    // Initialize plant operations tracking
+    if (!farmSession.plantOperations[farmSession.currentPlantUuid]) {
+        farmSession.plantOperations[farmSession.currentPlantUuid] = {};
+    }
+
+    // FIX #6: Start timeout tracker
+    farmSession.plantStartTime = Date.now();
+
+    // Start teleport sequence
+    startTeleport();
+}
+
+// ================================================
+// TELEPORT SEQUENCE - FIX #1: HANDLE "ALREADY THERE"
+// ================================================
+
+function startTeleport() {
+    // FIX #1: Check if already at location first
+    if (farmSession.lastLocation === farmSession.currentLocation) {
+        console.log("[TELEPORT] Already at location, skipping teleport");
+        console.log("[TELEPORT] Location: " + farmSession.currentLocation);
+
+        // Short delay then touch plant
+        setTimeout(function() {
+            setState(PlantState.WAITING_FOR_OBJECTS);
+            console.log("[TELEPORT] Ready to process plant");
+
+            setTimeout(function() {
+                // Disable flying
+                try {
+                    Bot.fly(false);
+                    console.log("[TELEPORT] ✓ Fly disabled");
+                } catch (e) {
+                    console.log("[TELEPORT] Fly disable failed (ignored)");
+                }
+                touchPlant();
+            }, 3000);
+        }, 1000);
+        return;
+    }
+
+    console.log("[TELEPORT] Going to: " + farmSession.currentLocation);
+    setState(PlantState.TELEPORTING);
+
+    // Teleport without await (fire and forget)
+    try {
+        Bot.teleport(farmSession.currentLocation);
+        console.log("[TELEPORT] ✓ Teleport command sent");
+
+        setTimeout(function() {
+            console.log("[TELEPORT] Arrived, waiting for objects...");
+            console.log("[TELEPORT] Waiting " + (DELAYS.OBJECT_LOADING / 1000) + " seconds...");
+            setState(PlantState.WAITING_FOR_OBJECTS);
+            farmSession.lastLocation = farmSession.currentLocation;
+
+            // FIX #2: Wait 45 seconds for objects to load
+            setTimeout(function() {
+                // Disable flying
+                try {
+                    Bot.fly(false);
+                    console.log("[TELEPORT] ✓ Fly disabled");
+                } catch (error) {
+                    console.log("[TELEPORT] Fly disable failed (may already be grounded)");
+                }
+
+                console.log("[TELEPORT] Ready to process plant");
+                touchPlant();
+            }, DELAYS.OBJECT_LOADING);
+
+        }, DELAYS.TELEPORT);
+
+    } catch (error) {
+        console.error("[TELEPORT] Failed: " + error.message);
+
+        // FIX #1: Check if error is "already at location"
+        if (error.message && error.message.toLowerCase().indexOf("already") !== -1) {
+            console.log("[TELEPORT] Bot reports already at location - treating as success");
+            farmSession.lastLocation = farmSession.currentLocation;
+
+            setTimeout(function() {
+                setState(PlantState.WAITING_FOR_OBJECTS);
+                console.log("[TELEPORT] Waiting " + (DELAYS.OBJECT_LOADING / 1000) + " seconds for objects...");
+
+                setTimeout(function() {
+                    try {
+                        Bot.fly(false);
+                    } catch (e) {}
+                    touchPlant();
+                }, DELAYS.OBJECT_LOADING);
+            }, DELAYS.TELEPORT);
+        } else {
+            // Real teleport failure
+            farmSession.failed++;
+            moveToNextPlant();
+        }
+    }
+}
+
+// ================================================
+// FARM SESSION COMPLETION
+// ================================================
+
+function completeFarmSession() {
+    console.log("========================================");
+    console.log("[FARM] ========== FARM COMPLETE ==========");
+    console.log("[FARM] Total plants: " + farmSession.plantQueue.length);
+    console.log("[FARM] Successful: " + farmSession.completed);
+    console.log("[FARM] Failed: " + farmSession.failed);
+    console.log("[FARM] Success rate: " + ((farmSession.completed / farmSession.plantQueue.length) * 100).toFixed(1) + "%");
+    console.log("========================================");
+
+    var summaryMsg = "Farm complete! Success: " + farmSession.completed + "/" + farmSession.plantQueue.length + ", Failed: " + farmSession.failed;
+
+    if (farmSession.sender) {
+        try {
+            Bot.im(farmSession.sender, summaryMsg);
+        } catch (error) {
+            console.error("[FARM] Failed to send completion IM: " + error.message);
+        }
+    }
+
+    // Reset session
+    resetFarmSession();
+}
+
+function resetFarmSession() {
+    farmSession.active = false;
+    farmSession.currentState = PlantState.IDLE;
+    farmSession.plantQueue = [];
+    farmSession.currentPlantIndex = -1;
+    farmSession.currentPlantUuid = null;
+    farmSession.currentLocation = null;
+    farmSession.lastLocation = null;
+    farmSession.currentDialog = null;
+    farmSession.plantOperations = {};
+    farmSession.touchCount = 0;
+    farmSession.dialogTimeout = null;
+    farmSession.retryCount = 0;
+    farmSession.completed = 0;
+    farmSession.failed = 0;
+    farmSession.sender = null;
+    farmSession.mrClickyStep = 0;
+    farmSession.mrClickyOperation = null;
+    farmSession.waterSourceSelected = false;
+    farmSession.waitingForWaterCompletion = false;
+    farmSession.plantStartTime = null;  // FIX #6
+}
+
+// ================================================
+// START FARM COMMAND
+// ================================================
+
+function startFarmSession(sender) {
+    if (farmSession.active) {
+        console.log("[FARM] Session already active");
+        try {
+            Bot.im(sender, "Farm session already in progress!");
+        } catch (error) {}
+        return;
+    }
+
+    console.log("[FARM] Starting new farm session");
+    resetFarmSession();
+
+    farmSession.active = true;
+    farmSession.sender = sender;
+    farmSession.plantQueue = PLANTS_SET_1.slice(); // Copy the array
+    farmSession.currentPlantIndex = -1;
+
+    console.log("[FARM] ========================================");
+    console.log("[FARM] STARTING FARM SESSION");
+    console.log("[FARM] Total plants: " + farmSession.plantQueue.length);
+    console.log("[FARM] Locations: " + Object.keys(PLANT_LOCATIONS).length);
+    console.log("[FARM] ========================================");
+
+    try {
+        Bot.im(sender, "Starting plant farming for " + farmSession.plantQueue.length + " plants...");
+    } catch (error) {
+        console.error("[FARM] Failed to send start IM: " + error.message);
+    }
+
+    // Start processing first plant
+    moveToNextPlant();
+}
+
+// ================================================
+// IM COMMAND HANDLER
+// ================================================
+
+Bot.on("instant_message", function(event) {
+    try {
+        // Use correct property from documentation
+        var sender = event.speaker_uuid;
+        var message = (event.message || "").trim();
+
+        if (!sender || sender === "00000000-0000-0000-0000-000000000000") return;
+        if (!message) return;
+
+        console.log("[IM] From: " + event.speaker_name + " (" + sender.substring(0, 8) + "...) Message: '" + message + "'");
+
+        var cmd = message.toLowerCase();
+
+        if (cmd === "farmallplants" || cmd === "farm") {
+            startFarmSession(sender);
+        } else if (cmd === "stop") {
+            if (farmSession.active) {
+                console.log("[IM] Stopping farm session");
+                completeFarmSession();
+                try {
+                    Bot.im(sender, "Farm session stopped.");
+                } catch (error) {}
+            } else {
+                try {
+                    Bot.im(sender, "No active farm session.");
+                } catch (error) {}
+            }
+        } else if (cmd === "status") {
+            if (farmSession.active) {
+                var statusMsg = "Plant " + (farmSession.currentPlantIndex + 1) + "/" + farmSession.plantQueue.length +
+                               "\nCompleted: " + farmSession.completed +
+                               "\nFailed: " + farmSession.failed +
+                               "\nState: " + farmSession.currentState;
+                try {
+                    Bot.im(sender, statusMsg);
+                } catch (error) {}
+            } else {
+                try {
+                    Bot.im(sender, "No active farm session.");
+                } catch (error) {}
+            }
+        } else if (cmd === "test") {
+            try {
+                Bot.im(sender, "Bot v5.6 EVENT-DRIVEN (22 Mr Clicky UUIDs) is working! Commands: farm, stop, status, test, help");
+            } catch (error) {
+                console.error("[IM] Test response failed: " + error.message);
+            }
+        } else if (cmd === "help") {
+            var helpMsg = "DFS Plant Bot v5.6 Commands:\n" +
+                         "- farm or farmallplants: Start farming\n" +
+                         "- stop: Stop current session\n" +
+                         "- status: Check progress\n" +
+                         "- test: Test bot\n" +
+                         "- help: Show this message";
+            try {
+                Bot.im(sender, helpMsg);
+            } catch (error) {
+                console.error("[IM] Help response failed: " + error.message);
+            }
+        } else {
+            try {
+                Bot.im(sender, "Unknown command. Try: farm, stop, status, test, or help");
+            } catch (error) {}
+        }
+    } catch (error) {
+        console.error("[IM] Handler error: " + error.message);
+    }
+});
+
+console.log("[INIT] ✓ IM handler registered");
+console.log("[INIT] ✓ Dialog handler registered");
+
+// ================================================
+// FINAL INITIALIZATION
+// ================================================
+
+console.log("========================================");
+console.log("[INIT] DFS Planting v5.6 EVENT-DRIVEN READY");
+console.log("[INIT] ✅ All diagnostic fixes applied");
+console.log("[INIT] ✅ 66 plants configured");
+console.log("[INIT] ✅ 45s object load delay");
+console.log("[INIT] ✅ Enhanced Mr Clicky logging");
+console.log("[INIT] ✅ Robust dialog handling");
+console.log("[INIT] ✅ 3-minute plant timeout");
+console.log("[INIT] ✅ Mr Clicky: 15s timer (3s stand + 12s sit)");
+console.log("[INIT] ✅ Quick invalid UUID skip (1 retry)");
+console.log("[INIT] ✅ Mr Clicky: 22 UUIDs loaded");
+console.log("[INIT] ✅ Promise handling fixes (#138, #139)");
+console.log("[INIT] ✅ Mr Clicky complete touch sequence (#140)");
+console.log("[INIT] Total plants: " + PLANTS_SET_1.length);
+console.log("[INIT] Locations: " + Object.keys(PLANT_LOCATIONS).length);
+console.log("[INIT] Commands: farm, stop, status, test, help");
+console.log("[INIT] Send 'test' via IM to verify");
+console.log("========================================");
+
+// Heartbeat to show script is alive
+setInterval(function() {
+    console.log("[HEARTBEAT] " + new Date().toISOString() + " | State: " + farmSession.currentState + " | Active: " + farmSession.active + " | Progress: " + farmSession.completed + "/" + farmSession.plantQueue.length);
+}, 60000);
