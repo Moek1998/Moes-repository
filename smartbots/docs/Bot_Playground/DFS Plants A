@@ -111,7 +111,7 @@ var DELAYS = {
 var MAX_TOUCHES = 15;
 var MAX_RETRIES_ON_NO_DIALOG = 1;  // Skip non-responsive plants quickly
 
-// Updated with all 66 plant UUIDs from user
+// Updated with all 68 plant UUIDs from user
 var PLANTS_SET_1 = [
     "aed3bd33-f3dd-ba98-b29c-dc395d701464", "e9c58369-bc20-57d3-ae82-aa99a8d76f27",
     "979b48ba-9eb2-50be-962c-402878c15acc", "3d562f11-9007-c125-7a72-37537d86e751",
