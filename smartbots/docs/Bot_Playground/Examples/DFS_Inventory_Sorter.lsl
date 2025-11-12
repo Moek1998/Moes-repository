@@ -51,7 +51,7 @@ string stripSpecialChars(string input)
     // Convert to uppercase for case insensitivity
     input = llToUpper(input);
     
-    // Define characters that should remain attached
+    // Define characters that should remain attached (underscore treated as separator)
     string alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     string cleaned = "";
     integer lastWasSpace = FALSE;
