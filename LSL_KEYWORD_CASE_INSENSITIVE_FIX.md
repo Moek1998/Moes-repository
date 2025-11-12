@@ -89,6 +89,29 @@ if (search != "" && folder != "")
 return llSubStringIndex(text, pattern) != -1;
 ```
 
+### Fix #4: Preserve Word Boundaries when Stripping Characters
+```lsl
+// NEW CODE (FIXED): stripSpecialChars()
+if (llSubStringIndex(alphanumeric, char) != -1)
+{
+    cleaned += char;
+    lastWasSpace = FALSE;
+}
+else
+{
+    if (!lastWasSpace)
+    {
+        cleaned += " ";
+        lastWasSpace = TRUE;
+    }
+}
+```
+
+- Any non-alphanumeric character (like `_`, `-`, `[`, `]`, `.`) becomes a single space
+- Consecutive symbols collapse into **one** space, so words stay separated
+- Example: `Dstudios_LaurelTop_Kupra_P2` → `DSTUDIOS LAUREL TOP KUPRA P2`
+- Keywords like `KUPRA` now match correctly inside complex names!
+
 Now the matching logic works like this:
 - Pattern: `MUNECA`
 - Text: `TRENDY LULU BRA MUNECA`
@@ -180,9 +203,9 @@ if (llSubStringIndex(objNameUpper, "SHIRT MODE") != -1)
 4. ✅ **Wildcard support** - Use `*` for advanced patterns
 5. ✅ **Robust and reliable** - No more missing items!
 
-## Testing Example
+## Testing Examples
 
-### Test Case: "TRENDY. Lulu Bra [Muneca]"
+### Test Case 1: "TRENDY. Lulu Bra [Muneca]"
 
 ```
 Input: TRENDY. Lulu Bra [Muneca]
@@ -190,23 +213,81 @@ Keyword: MUNECA
 
 Step 1 - Clean name:
   stripSpecialChars("TRENDY. Lulu Bra [Muneca]")
+  Converts to uppercase: "TRENDY. LULU BRA [MUNECA]"
+  Replaces '.' with ' ': "TRENDY  LULU BRA [MUNECA]"
+  Replaces '[' with ' ': "TRENDY  LULU BRA  MUNECA]"
+  Replaces ']' with ' ': "TRENDY  LULU BRA  MUNECA "
+  Collapses consecutive spaces and trims
   → "TRENDY LULU BRA MUNECA"
 
-Step 2 - Convert to uppercase:
-  Already uppercase: "TRENDY LULU BRA MUNECA"
-
-Step 3 - Check if "MUNECA" is in "TRENDY LULU BRA MUNECA":
+Step 2 - Check if "MUNECA" is in "TRENDY LULU BRA MUNECA":
   llSubStringIndex("TRENDY LULU BRA MUNECA", "MUNECA")
   → 17 (found at position 17)
 
-Step 4 - Match result:
+Step 3 - Match result:
   17 != -1, so MATCH = TRUE ✅
 
-Step 5 - Get folder:
+Step 4 - Get folder:
   Keyword "MUNECA" → Folder "MUNECA"
 
-Step 6 - Deliver:
+Step 5 - Deliver:
   Item delivered to "MUNECA" folder ✅
+```
+
+### Test Case 2: "#Dios - Morgan Hoodie [ PINK ] Kupra"
+
+```
+Input: #Dios - Morgan Hoodie [ PINK ] Kupra
+Keyword: KUPRA
+
+Step 1 - Clean name:
+  stripSpecialChars("#Dios - Morgan Hoodie [ PINK ] Kupra")
+  Converts to uppercase: "#DIOS - MORGAN HOODIE [ PINK ] KUPRA"
+  Replaces '#' with ' ': " DIOS - MORGAN HOODIE [ PINK ] KUPRA"
+  Replaces '-' with ' ': " DIOS   MORGAN HOODIE [ PINK ] KUPRA"
+  Replaces '[' with ' ': " DIOS   MORGAN HOODIE   PINK ] KUPRA"
+  Replaces ']' with ' ': " DIOS   MORGAN HOODIE   PINK   KUPRA"
+  Collapses consecutive spaces and trims
+  → "DIOS MORGAN HOODIE PINK KUPRA"
+
+Step 2 - Check if "KUPRA" is in "DIOS MORGAN HOODIE PINK KUPRA":
+  llSubStringIndex("DIOS MORGAN HOODIE PINK KUPRA", "KUPRA")
+  → 25 (found at position 25)
+
+Step 3 - Match result:
+  25 != -1, so MATCH = TRUE ✅
+
+Step 4 - Get folder:
+  Keyword "KUPRA" → Folder "KUPRA"
+
+Step 5 - Deliver:
+  Item delivered to "KUPRA" folder ✅
+```
+
+### Test Case 3: "Dstudios_LaurelTop_Kupra_P2"
+
+```
+Input: Dstudios_LaurelTop_Kupra_P2
+Keyword: KUPRA
+
+Step 1 - Clean name:
+  stripSpecialChars("Dstudios_LaurelTop_Kupra_P2")
+  Converts to uppercase: "DSTUDIOS_LAURELTOP_KUPRA_P2"
+  Replaces '_' with ' ': "DSTUDIOS LAURELTOP KUPRA P2"
+  → "DSTUDIOS LAURELTOP KUPRA P2"
+
+Step 2 - Check if "KUPRA" is in "DSTUDIOS LAURELTOP KUPRA P2":
+  llSubStringIndex("DSTUDIOS LAURELTOP KUPRA P2", "KUPRA")
+  → 19 (found at position 19)
+
+Step 3 - Match result:
+  19 != -1, so MATCH = TRUE ✅
+
+Step 4 - Get folder:
+  Keyword "KUPRA" → Folder "KUPRA"
+
+Step 5 - Deliver:
+  Item delivered to "KUPRA" folder ✅
 ```
 
 ## Files Modified

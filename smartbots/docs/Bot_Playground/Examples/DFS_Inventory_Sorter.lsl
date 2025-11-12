@@ -51,9 +51,10 @@ string stripSpecialChars(string input)
     // Convert to uppercase for case insensitivity
     input = llToUpper(input);
     
-    // Define characters to keep - only alphanumeric and spaces
-    string allowed = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
+    // Define characters that should remain attached
+    string alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     string cleaned = "";
+    integer lastWasSpace = FALSE;
     
     // Process each character
     integer length = llStringLength(input);
@@ -61,13 +62,22 @@ string stripSpecialChars(string input)
     for (i = 0; i < length; i++) 
     {
         string char = llGetSubString(input, i, i);
-        if (llSubStringIndex(allowed, char) != -1) 
+        if (llSubStringIndex(alphanumeric, char) != -1)
         {
             cleaned += char;
+            lastWasSpace = FALSE;
+        }
+        else
+        {
+            if (!lastWasSpace)
+            {
+                cleaned += " ";
+                lastWasSpace = TRUE;
+            }
         }
     }
     
-    return cleaned;
+    return llStringTrim(cleaned, STRING_TRIM);
 }
 
 
